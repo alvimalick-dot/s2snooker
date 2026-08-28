@@ -18,7 +18,7 @@ const TransactionSchema = new Schema(
 
 const CustomerAccountSchema = new Schema(
   {
-    customerId: { type: String, default: null, sparse: true },
+    customerId: { type: String, default: null },
     customerName: { type: String, required: true, index: true },
     balance: { type: Number, default: 0 }, // positive = customer owes, negative = overpaid
     totalCharged: { type: Number, default: 0 }, // lifetime charges

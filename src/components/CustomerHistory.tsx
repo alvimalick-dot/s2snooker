@@ -24,9 +24,10 @@ function formatElapsed(ms: number) {
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 
+import { todayPKT } from '@/lib/useClock';
+
 function todayStr() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return todayPKT();
 }
 
 type Tab = 'active' | 'paid' | 'all';

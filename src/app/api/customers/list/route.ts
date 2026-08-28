@@ -209,6 +209,13 @@ export async function GET(req: NextRequest) {
           activeEntry.totalSpent = entry.totalSpent;
           if (entry.paymentStatus === 'unpaid') activeEntry.paymentStatus = 'unpaid';
           else if (entry.paymentStatus === 'partial' && activeEntry.paymentStatus !== 'unpaid') activeEntry.paymentStatus = 'partial';
+          const acct = await CustomerAccount.findOne(
+            activeEntry.customerId ? { customerId: activeEntry.customerId } : { customerName: activeEntry.customerName }
+          ).lean();
+          activeEntry.accountBalance = (acct as any)?.balance ?? 0;
+          activeEntry.totalPaid = (acct as any)?.totalPaid ?? 0;
+          // Also add to paidResults so they appear in the Ended tab too
+          paidResults.push(activeEntry);
         }
         continue;
       }
