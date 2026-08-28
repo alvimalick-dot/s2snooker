@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { useClock } from '@/lib/useClock';
+import ModalShell from './ModalShell';
 
 function formatTime(iso?: string) {
   if (!iso) return '—';
@@ -198,11 +199,16 @@ export default function CustomerHistory() {
             date={date}
             onSelect={setSelectedCustomer}
           />
-        ) : (
-          <Detail
+        ) : selectedCustomer.status === 'active' ? (
+          <ActiveDetail
             customer={selectedCustomer}
             onBack={() => setSelectedCustomer(null)}
-            onPaid={load}
+          />
+        ) : (
+          <BillPopup
+            customer={selectedCustomer}
+            onClose={() => setSelectedCustomer(null)}
+            onPaid={() => { setSelectedCustomer(null); load(); }}
           />
         )}
       </div>
@@ -306,14 +312,8 @@ function List({ customers, loading, tab, date, onSelect }: {
   );
 }
 
-// ── Detail View ─────────────────────────────────────────────────
-function Detail({ customer, onBack, onPaid }: {
-  customer: CustomerEntry;
-  onBack: () => void;
-  onPaid: () => void;
-}) {
-  const isActive = customer.status === 'active';
-
+// ── Active Detail (inline, no modal) ───────────────────────────
+function ActiveDetail({ customer, onBack }: { customer: CustomerEntry; onBack: () => void }) {
   return (
     <div className="space-y-4">
       <button onClick={onBack}
@@ -321,52 +321,15 @@ function Detail({ customer, onBack, onPaid }: {
         <span className="text-lg">←</span> Back to list
       </button>
 
-      {/* Customer header */}
       <div className="flex items-center gap-3 flex-wrap">
-        <StatusDot status={customer.status} />
+        <StatusDot status="active" />
         <div className="text-xl font-extrabold text-ink">{customer.customerName}</div>
-        <span className={`text-[11px] font-bold uppercase px-3 py-1 rounded-full ${
-          isActive ? 'bg-available-bg text-available border border-available/20' : 'bg-slate-800 text-slate-300 border border-surface-border'
-        }`}>
-          {isActive ? '● Active' : 'Ended'}
-        </span>
-        {customer.paymentStatus && customer.paymentStatus !== 'paid' && (
-          <PaymentBadge status={customer.paymentStatus} />
-        )}
+        <span className="text-[11px] font-bold uppercase px-3 py-1 rounded-full bg-available-bg text-available border border-available/20">● Active</span>
       </div>
 
-      {/* ═══ ACTIVE SESSION DETAILS ═══════════════════════════════ */}
-      {isActive && customer.tables?.map((t, i) => (
+      {customer.tables?.map((t, i) => (
         <ActiveSessionCard key={i} table={t} />
       ))}
-
-      {/* ═══ ENDED SESSION DETAILS ═══════════════════════════════ */}
-      {!isActive && customer.sessions && customer.sessions.length > 0 && (
-        <div className="space-y-3">
-          <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Session History</div>
-          {customer.sessions.map((s, i) => (
-            <EndedSessionCard key={i} session={s} onPaid={onPaid} />
-          ))}
-        </div>
-      )}
-
-      {/* Account balance */}
-      {customer.accountBalance !== undefined && customer.accountBalance !== 0 && (
-        <div className={`rounded-xl border-2 p-4 ${
-          customer.accountBalance > 0
-            ? 'border-occupied/20 bg-occupied-bg'
-            : 'border-available/20 bg-available-bg'
-        }`}>
-          <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Account Balance</div>
-          <div className={`font-mono text-2xl font-extrabold ${
-            customer.accountBalance > 0 ? 'text-occupied' : 'text-available'
-          }`}>
-            {customer.accountBalance > 0
-              ? `Rs ${customer.accountBalance.toLocaleString()} owed`
-              : `Rs ${Math.abs(customer.accountBalance).toLocaleString()} credit`}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -374,7 +337,6 @@ function Detail({ customer, onBack, onPaid }: {
 // ── Active Session Card ─────────────────────────────────────────
 function ActiveSessionCard({ table }: { table: CustomerEntry['tables'] extends (infer T)[] | undefined ? Extract<T, object> : never }) {
   const now = useClock(1000);
-  // Compute live elapsed from start time
   const startTime = table.startTime ? new Date(table.startTime).getTime() : 0;
   const liveElapsedMs = startTime > 0
     ? Math.max(0, new Date(now).getTime() - startTime)
@@ -383,7 +345,6 @@ function ActiveSessionCard({ table }: { table: CustomerEntry['tables'] extends (
 
   return (
     <div className="bg-available-bg border-2 border-available/20 rounded-xl overflow-hidden">
-      {/* Top bar: table name + live bill */}
       <div className="flex items-center justify-between px-4 py-3 bg-available/5">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-available animate-pulse" />
@@ -393,8 +354,6 @@ function ActiveSessionCard({ table }: { table: CustomerEntry['tables'] extends (
           Rs {(table.currentBill ?? 0).toLocaleString()}
         </span>
       </div>
-
-      {/* Details grid */}
       <div className="px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-2">
         <DetailField label="Game" value={gameLabel || 'Unknown'} />
         <DetailField label="Elapsed" value={liveElapsedMs > 0 ? formatElapsed(liveElapsedMs) : '—'} mono />
@@ -408,12 +367,7 @@ function ActiveSessionCard({ table }: { table: CustomerEntry['tables'] extends (
         {table.durationMinutes != null && table.durationMinutes > 0 && (
           <DetailField label="Included" value={`${table.durationMinutes} min`} />
         )}
-        {table.overtimeRate != null && table.overtimeRate > 0 && (
-          <DetailField label="Overtime" value={`Rs ${table.overtimeRate}/min`} />
-        )}
       </div>
-
-      {/* Food orders */}
       {table.activeOrders && table.activeOrders.length > 0 && (
         <div className="border-t border-available/10 px-4 py-3">
           <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">Food Orders</div>
@@ -431,185 +385,229 @@ function ActiveSessionCard({ table }: { table: CustomerEntry['tables'] extends (
   );
 }
 
-// ── Ended Session Card ──────────────────────────────────────────
-function EndedSessionCard({ session, onPaid }: {
-  session: NonNullable<CustomerEntry['sessions']>[number];
+// ═══ BILL POPUP (unified receipt for ended customers) ═══════════
+function BillPopup({ customer, onClose, onPaid }: {
+  customer: CustomerEntry;
+  onClose: () => void;
   onPaid: () => void;
 }) {
-  const [paying, setPaying] = useState(false);
   const [payBusy, setPayBusy] = useState(false);
+  const [payMethod, setPayMethod] = useState<'cash' | 'card' | 'account'>('cash');
 
-  const totalPaid = (session.settlements ?? []).reduce((sum, s: any) => s.amount > 0 ? sum + s.amount : sum, 0);
-  const remaining = Math.max(0, session.totalRevenue - totalPaid);
-  const isPaid = session.paymentStatus === 'paid';
-  const isPartial = session.paymentStatus === 'partial';
-  const isUnpaid = session.paymentStatus === 'unpaid';
+  const sessions = customer.sessions ?? [];
+  const totalAll = sessions.reduce((sum, s) => sum + s.totalRevenue, 0);
+  const totalPaid = sessions.reduce((sum, s) => {
+    const paid = (s.settlements ?? []).reduce((ps: number, st: any) => st.amount > 0 ? ps + st.amount : ps, 0);
+    return sum + paid;
+  }, 0);
+  const totalRemaining = Math.max(0, totalAll - totalPaid);
+  const isFullyPaid = totalRemaining === 0 && totalAll > 0;
 
-  async function markPaid() {
-    if (!session._id) return;
+  async function handlePayAll() {
+    if (totalRemaining <= 0) return;
     setPayBusy(true);
     try {
-      await api.patch('/api/customers/history', {
-        logId: session._id,
-        type: 'cash',
-        amount: remaining,
+      // Pay all unpaid sessions
+      const unpaidSessions = sessions.filter((s) => {
+        const paid = (s.settlements ?? []).reduce((sum: number, st: any) => st.amount > 0 ? sum + st.amount : 0, 0);
+        return paid < s.totalRevenue;
       });
+
+      await Promise.all(
+        unpaidSessions.map(async (s) => {
+          if (!s._id) return;
+          const paid = (s.settlements ?? []).reduce((sum: number, st: any) => st.amount > 0 ? sum + st.amount : 0, 0);
+          const remaining = Math.max(0, s.totalRevenue - paid);
+          if (remaining > 0) {
+            await api.patch('/api/customers/history', {
+              logId: s._id,
+              type: payMethod,
+              amount: remaining,
+            });
+          }
+        })
+      );
       onPaid();
     } catch (e: any) {
       alert(e.message ?? 'Failed to record payment');
     } finally {
       setPayBusy(false);
-      setPaying(false);
     }
   }
 
-  return (
-    <div className="bg-slate-800 border-2 border-surface-border rounded-xl overflow-hidden">
-      {/* Top bar: table + total + status */}
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="text-base font-bold text-ink">
-            {session.isPrivateRoom ? `Room ${session.tableNumber}` : `Table ${session.tableNumber}`}
-          </span>
-          <PaymentBadge status={session.paymentStatus} />
-        </div>
-        <span className="font-mono text-xl font-extrabold text-ink tabular-nums">
-          Rs {session.totalRevenue.toLocaleString()}
-        </span>
-      </div>
-
-      {/* Timing */}
-      <div className="px-4 pb-2 text-sm text-slate-400 font-semibold">
-        {formatDate(session.startTime)} {formatTime(session.startTime)} – {formatTime(session.endTime)}
-        {session.closedBy && <span className="ml-2 text-slate-400/70">by {session.closedBy}</span>}
-      </div>
-
-      {/* Accumulated charges from previous games */}
-      {session.accumulatedCharges && session.accumulatedCharges.length > 0 && (
-        <div className="px-4 py-2.5 border-t border-surface-border">
-          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">Previous Games ({session.accumulatedCharges.length})</div>
-          <div className="space-y-1">
-            {session.accumulatedCharges.map((c, i) => (
-              <div key={i} className="flex items-center justify-between text-xs">
-                <span className="text-slate-300">
-                  {(c.gameType || 'Game').replace(/_/g, ' ')} · T{c.tableNumber} · {c.elapsedMinutes} min
-                </span>
-                <span className="font-mono text-brass font-bold">Rs {(c.gameTotal + c.foodTotal).toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Bill breakdown */}
-      <div className="px-4 py-3 bg-surface-dark/40 border-t border-surface-border">
-        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Bill Breakdown</div>
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Table Rental</span>
-            <span className="font-mono text-ink font-semibold">Rs {(session.tableRentalRevenue ?? 0).toLocaleString()}</span>
-          </div>
-          {(session.menuSalesRevenue ?? 0) > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-400">Food & Drinks</span>
-              <span className="font-mono text-ink font-semibold">Rs {(session.menuSalesRevenue ?? 0).toLocaleString()}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between text-sm border-t border-surface-border pt-1.5">
-            <span className="text-ink font-bold">Total</span>
-            <span className="font-mono text-brass font-extrabold">Rs {session.totalRevenue.toLocaleString()}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Ordered items */}
-      {session.items && session.items.length > 0 && (
-        <div className="px-4 py-3 border-t border-surface-border">
-          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">Ordered Items</div>
-          <div className="flex flex-col gap-1">
-            {session.items.map((it: any, j: number) => (
-              <div key={j} className="flex items-center justify-between text-sm">
-                <span className="text-ink">{it.quantity}× {it.itemName}</span>
-                <span className="font-mono text-brass font-semibold">
-                  Rs {((it.price ?? 0) * (it.quantity ?? 1)).toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Settlements */}
-      {session.settlements && session.settlements.length > 0 && (
-        <div className="px-4 py-3 border-t border-surface-border">
-          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">Payments</div>
-          <div className="flex flex-wrap gap-1.5">
-            {session.settlements.map((st: any, j: number) => (
-              <span key={j} className={`text-[11px] px-2.5 py-1 rounded-full font-bold ${
-                st.type === 'cash' ? 'bg-available-bg text-available border border-available/20' :
-                st.type === 'card' ? 'bg-blue-950 text-blue-300 border border-blue-800' :
-                st.type === 'account' ? 'bg-reserved-bg text-reserved border border-reserved/20' :
-                'bg-slate-800 text-slate-300 border border-surface-border'
-              }`}>
-                {st.type}: Rs {Math.abs(st.amount).toLocaleString()}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Mark as Paid button */}
-      {!isPaid && remaining > 0 && (
-        <div className="px-4 py-3 border-t border-surface-border">
-          {paying ? (
-            <div className="flex gap-2 items-end">
-              <div className="flex-1">
-                <label className="block text-[10px] text-slate-400 font-semibold mb-0.5">Amount</label>
-                <input
-                  type="number"
-                  defaultValue={remaining}
-                  id={`pay-amount-${session._id}`}
-                  className="w-full rounded-lg bg-slate-800 border-2 border-surface-border px-3 py-2 text-sm text-white focus:outline-none focus:border-brass font-mono"
-                />
-              </div>
-              <button
-                disabled={payBusy}
-                onClick={() => {
-                  const input = document.getElementById(`pay-amount-${session._id}`) as HTMLInputElement;
-                  const amt = Number(input?.value) || remaining;
-                  // Directly call with the right amount
-                  if (!session._id) return;
-                  setPayBusy(true);
-                  api.patch('/api/customers/history', {
-                    logId: session._id,
-                    type: 'cash',
-                    amount: amt,
-                  }).then(() => { onPaid(); }).catch((e: any) => { alert(e.message ?? 'Failed'); }).finally(() => { setPayBusy(false); setPaying(false); });
-                }}
-                className="rounded-lg bg-available px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-              >
-                {payBusy ? 'Saving…' : 'Confirm'}
-              </button>
-              <button onClick={() => setPaying(false)} className="text-sm text-slate-400 px-2">Cancel</button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setPaying(true)}
-              className="w-full rounded-xl bg-available/10 border-2 border-available/30 px-4 py-2.5 text-sm font-bold text-available hover:bg-available/20 transition-colors active:scale-[0.98]"
-            >
-              💰 Mark as Paid{isPartial ? ` (Rs ${remaining.toLocaleString()} remaining)` : ` (Rs ${remaining.toLocaleString()})`}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Already paid */}
-      {isPaid && (
-        <div className="px-4 py-2.5 border-t border-surface-border bg-available/5">
-          <div className="text-sm font-bold text-available text-center">✓ Fully Paid</div>
-        </div>
+  const footer = (
+    <div className="flex gap-3 justify-end">
+      <button
+        onClick={onClose}
+        className="px-5 py-3 rounded-xl text-base font-semibold border-2 border-surface-border text-ink hover:bg-slate-700 active:scale-[0.98] transition-all"
+      >
+        Close
+      </button>
+      {!isFullyPaid && (
+        <button
+          disabled={payBusy}
+          onClick={handlePayAll}
+          className="px-8 py-3 rounded-xl text-base font-bold bg-available text-white shadow-md hover:bg-available/90 active:scale-[0.98] transition-all disabled:opacity-50"
+        >
+          {payBusy ? 'Processing…' : `💰 Pay Rs ${totalRemaining.toLocaleString()}`}
+        </button>
       )}
     </div>
+  );
+
+  return (
+    <ModalShell
+      title="Bill"
+      subtitle={customer.customerName}
+      onClose={onClose}
+      busy={payBusy}
+      footer={footer}
+      width="max-w-lg"
+    >
+      {/* ── Paper receipt style ───────────────────────────────── */}
+      <div className="space-y-0">
+        {sessions.map((s, i) => {
+          const sessionPaid = (s.settlements ?? []).reduce((sum: number, st: any) => st.amount > 0 ? sum + st.amount : 0, 0);
+          const sessionRemaining = Math.max(0, s.totalRevenue - sessionPaid);
+          const isSessionPaid = sessionRemaining === 0 && s.totalRevenue > 0;
+
+          return (
+            <div key={i} className="border-b border-dashed border-surface-border py-3 last:border-b-0">
+              {/* Table header */}
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-slate-800 border border-surface-border flex items-center justify-center text-[10px] font-bold text-slate-400">
+                    {i + 1}
+                  </span>
+                  <span className="text-base font-bold text-ink">
+                    {s.isPrivateRoom ? `Room ${s.tableNumber}` : `Table ${s.tableNumber}`}
+                  </span>
+                  {isSessionPaid ? (
+                    <span className="text-[10px] font-bold text-available bg-available-bg border border-available/20 px-1.5 py-0.5 rounded">PAID</span>
+                  ) : sessionRemaining < s.totalRevenue ? (
+                    <span className="text-[10px] font-bold text-reserved bg-reserved-bg border border-reserved/20 px-1.5 py-0.5 rounded">PARTIAL</span>
+                  ) : null}
+                </div>
+                <span className="font-mono text-lg font-extrabold text-ink tabular-nums">
+                  Rs {s.totalRevenue.toLocaleString()}
+                </span>
+              </div>
+
+              {/* Timing */}
+              <div className="text-xs text-slate-400 font-semibold mb-1.5 ml-8">
+                {formatDate(s.startTime)} {formatTime(s.startTime)} – {formatTime(s.endTime)}
+              </div>
+
+              {/* Bill line items */}
+              <div className="ml-8 space-y-1">
+                {/* Table rental */}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-400">Game</span>
+                  <span className="font-mono text-ink font-semibold">Rs {(s.tableRentalRevenue ?? 0).toLocaleString()}</span>
+                </div>
+
+                {/* Food */}
+                {(s.menuSalesRevenue ?? 0) > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-400">Food & Drinks</span>
+                    <span className="font-mono text-ink font-semibold">Rs {(s.menuSalesRevenue ?? 0).toLocaleString()}</span>
+                  </div>
+                )}
+
+                {/* Individual food items */}
+                {s.items && s.items.length > 0 && (
+                  <div className="pl-3 border-l-2 border-surface-border mt-1 space-y-0.5">
+                    {s.items.map((it: any, j: number) => (
+                      <div key={j} className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">{it.quantity}× {it.itemName}</span>
+                        <span className="font-mono text-slate-400">Rs {((it.price ?? 0) * (it.quantity ?? 1)).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Accumulated charges */}
+                {s.accumulatedCharges && s.accumulatedCharges.length > 0 && (
+                  <div className="pl-3 border-l-2 border-surface-border mt-1 space-y-0.5">
+                    {s.accumulatedCharges.map((c, j) => (
+                      <div key={j} className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400">
+                          Prev: {(c.gameType || 'Game').replace(/_/g, ' ')} · T{c.tableNumber}
+                        </span>
+                        <span className="font-mono text-slate-400">Rs {(c.gameTotal + c.foodTotal).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Payment settled */}
+                {sessionPaid > 0 && (
+                  <div className="flex items-center justify-between text-xs mt-1 pt-1 border-t border-surface-border border-dashed">
+                    <span className="text-available font-semibold">Paid</span>
+                    <span className="font-mono text-available font-bold">-Rs {sessionPaid.toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Grand Total ──────────────────────────────────────── */}
+      <div className="mt-4 rounded-xl border-2 border-brass/30 bg-brass-bg px-5 py-4">
+        <div className="flex items-center justify-between">
+          <span className="text-lg font-extrabold text-ink">
+            Total
+            {sessions.length > 1 && <span className="text-xs text-slate-400 font-semibold ml-2">{sessions.length} tables</span>}
+          </span>
+          <span className="font-mono text-4xl font-extrabold text-brass tabular-nums">
+            Rs {totalAll.toLocaleString()}
+          </span>
+        </div>
+        {totalPaid > 0 && (
+          <div className="flex items-center justify-between text-sm mt-1">
+            <span className="text-slate-400 font-semibold">Already paid</span>
+            <span className="font-mono text-available font-bold">-Rs {totalPaid.toLocaleString()}</span>
+          </div>
+        )}
+        {totalRemaining > 0 && (
+          <div className="flex items-center justify-between text-lg mt-1 pt-1.5 border-t border-brass/20">
+            <span className="text-ink font-extrabold">Remaining</span>
+            <span className="font-mono text-occupied font-extrabold">Rs {totalRemaining.toLocaleString()}</span>
+          </div>
+        )}
+        {isFullyPaid && (
+          <div className="text-center text-available font-bold text-sm mt-1">✓ Fully Paid</div>
+        )}
+      </div>
+
+      {/* ── Payment method (only if something is owed) ────────── */}
+      {!isFullyPaid && totalRemaining > 0 && (
+        <div className="mt-4">
+          <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2">Payment Method</div>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { key: 'cash' as const, label: 'Cash', icon: '💵', active: 'border-available/40 bg-available-bg text-available' },
+              { key: 'card' as const, label: 'Card', icon: '💳', active: 'border-blue-800 bg-blue-950 text-blue-300' },
+              { key: 'account' as const, label: 'Account', icon: '👤', active: 'border-reserved/40 bg-reserved-bg text-reserved' },
+            ]).map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setPayMethod(opt.key)}
+                className={`rounded-xl border-2 px-3 py-3 text-center transition-all ${
+                  payMethod === opt.key
+                    ? `${opt.active} shadow-sm`
+                    : 'border-surface-border bg-slate-800 text-ink hover:border-slate-500'
+                }`}
+              >
+                <div className="text-xl mb-1">{opt.icon}</div>
+                <div className="text-sm font-bold">{opt.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </ModalShell>
   );
 }
 

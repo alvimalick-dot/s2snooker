@@ -69,10 +69,14 @@ export async function GET(req: NextRequest) {
           isPaused: t.currentSession.isPaused,
           pauseStartedAt: t.currentSession.pauseStartedAt,
         });
-        liveOpenRevenue.tableRentalRevenue += bill.tableTotal;
-        liveOpenRevenue.menuSalesRevenue += bill.foodTotal;
-        liveOpenRevenue.totalRevenue += bill.total;
-        if (t.isPrivateRoom) liveOpenRevenue.roomRentalRevenue += bill.tableTotal;
+        // Include accumulated charges from previous games in this session
+        const acc = t.currentSession.accumulatedCharges ?? [];
+        const accGameTotal = acc.reduce((sum: number, c: any) => sum + c.gameTotal, 0);
+        const accFoodTotal = acc.reduce((sum: number, c: any) => sum + c.foodTotal, 0);
+        liveOpenRevenue.tableRentalRevenue += bill.tableTotal + accGameTotal;
+        liveOpenRevenue.menuSalesRevenue += bill.foodTotal + accFoodTotal;
+        liveOpenRevenue.totalRevenue += bill.total + accGameTotal + accFoodTotal;
+        if (t.isPrivateRoom) liveOpenRevenue.roomRentalRevenue += bill.tableTotal + accGameTotal;
       }
       totals.tableRentalRevenue += liveOpenRevenue.tableRentalRevenue;
       totals.roomRentalRevenue += liveOpenRevenue.roomRentalRevenue;

@@ -171,6 +171,7 @@ export async function GET(req: NextRequest) {
         closedBy: log.closedBy,
         items: log.items ?? [],
         settlements: log.settlements ?? [],
+        accumulatedCharges: (log as any).accumulatedCharges ?? [],
         paymentStatus,
       };
 
