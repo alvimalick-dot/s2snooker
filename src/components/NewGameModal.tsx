@@ -400,7 +400,7 @@ export default function NewGameModal({
       {allTables.filter((t) => t.status === 'available').length > 1 && (
         <div className="mb-4">
           <label className="block text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">Next Game On</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {availableTargets.map((t) => (
               <button
                 key={t._id}

@@ -34,7 +34,7 @@ function FitGrid<T extends { _id: string }>({
   const rows = Math.max(1, Math.ceil(tables.length / cols));
   return (
     <div
-      className="flex-1 min-h-0 grid gap-4"
+      className="flex-1 min-h-0 grid gap-3 sm:gap-4"
       style={{
         gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
         gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
@@ -45,6 +45,17 @@ function FitGrid<T extends { _id: string }>({
       ))}
     </div>
   );
+}
+
+function useWindowWidth() {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    setWidth(window.innerWidth);
+    function handleResize() { setWidth(window.innerWidth); }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  return width;
 }
 
 export default function DashboardPage() {
@@ -65,6 +76,12 @@ export default function DashboardPage() {
   const [orderModalTable, setOrderModalTable] = useState<TableDoc | null>(null);
   const [endModalTable, setEndModalTable] = useState<TableDoc | null>(null);
   const [newGameModalTable, setNewGameModalTable] = useState<TableDoc | null>(null);
+
+  const windowWidth = useWindowWidth();
+
+  // Responsive column counts
+  const mainCols = windowWidth < 640 ? 1 : windowWidth < 1024 ? 2 : windowWidth < 1440 ? 3 : 4;
+  const isMobile = windowWidth < 768;
 
   const refresh = useCallback(async () => {
     try {
@@ -172,12 +189,12 @@ export default function DashboardPage() {
         onLogout={handleLogout}
       />
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* === FLOOR VIEW === */}
         {tab === 'floor' && (
-          <main className="flex-1 min-h-0 overflow-hidden p-6 flex flex-col gap-4">
+          <main className="flex-1 min-h-0 overflow-hidden p-3 sm:p-6 flex flex-col gap-3 sm:gap-4">
             {loadError && (
-              <div className="shrink-0 bg-occupied/10 border border-occupied/30 rounded-xl p-4 text-sm text-occupied">
+              <div className="shrink-0 bg-occupied/10 border border-occupied/30 rounded-xl p-3 sm:p-4 text-xs sm:text-sm text-occupied">
                 {loadError}
               </div>
             )}
@@ -187,10 +204,10 @@ export default function DashboardPage() {
             </div>
 
             {tables.length > 0 ? (
-              <div className="flex-1 min-h-0 flex gap-4 overflow-hidden">
+              <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 sm:gap-4 overflow-hidden">
                 <div className="flex-1 min-h-0 flex flex-col">
-                  <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Standard Tables</div>
-                  <FitGrid tables={mainTables} cols={4}>
+                  <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-slate-400 mb-2 sm:mb-3">Standard Tables</div>
+                  <FitGrid tables={mainTables} cols={mainCols}>
                     {(t) => (
                       <TableCard
                         key={t._id}
@@ -207,9 +224,9 @@ export default function DashboardPage() {
                 </div>
 
                 {privateTables.length > 0 && (
-                  <div className="w-[22rem] shrink-0 min-h-0 flex flex-col">
-                    <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Private Room</div>
-                    <FitGrid tables={privateTables} cols={1}>
+                  <div className="w-full lg:w-[22rem] shrink-0 min-h-0 flex flex-col">
+                    <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-slate-400 mb-2 sm:mb-3">Private Room</div>
+                    <FitGrid tables={privateTables} cols={isMobile ? mainCols : 1}>
                       {(t) => (
                         <TableCard
                           key={t._id}
@@ -239,7 +256,7 @@ export default function DashboardPage() {
         {tab === 'admin' && (
           <>
             <Sidebar active={adminTab} onSelect={setAdminTab} />
-            <main className="flex-1 min-h-0 overflow-hidden p-6 flex flex-col">
+            <main className="flex-1 min-h-0 overflow-hidden p-3 sm:p-6 flex flex-col">
               <div className={`flex-1 min-h-0 ${adminTab === 'customers' ? 'overflow-y-auto' : 'overflow-y-auto rounded-2xl border-2 border-surface-border bg-surface-card/40'}`}>
                 {adminTab === 'rates' && <TableRatesManager />}
                 {adminTab === 'menu' && <MenuManager menu={menu} onChanged={refresh} />}

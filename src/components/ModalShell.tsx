@@ -51,7 +51,7 @@ export default function ModalShell({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4"
       onClick={(e) => {
         // Dismiss on backdrop click (not on card click)
         if (e.target === e.currentTarget) onClose();
@@ -59,10 +59,10 @@ export default function ModalShell({
     >
       <div
         ref={cardRef}
-        className={`bg-surface-card rounded-3xl w-full ${width} flex flex-col max-h-[90vh] shadow-xl`}
+        className={`bg-surface-card rounded-3xl w-full ${width} flex flex-col max-h-[95vh] sm:max-h-[90vh] shadow-xl`}
       >
         {/* ── Header ─────────────────────────────────────────── */}
-        <div className="flex items-start justify-between px-7 pt-6 pb-3 shrink-0">
+        <div className="flex items-start justify-between px-4 sm:px-7 pt-4 sm:pt-6 pb-2 sm:pb-3 shrink-0">
           <div>
             <h2 className="text-2xl font-extrabold text-ink leading-tight">{title}</h2>
             {subtitle && (
@@ -81,13 +81,13 @@ export default function ModalShell({
         </div>
 
         {/* ── Scrollable body ────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-7 pb-4 min-h-0">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-7 pb-3 sm:pb-4 min-h-0">
           {children}
         </div>
 
         {/* ── Footer ─────────────────────────────────────────── */}
         {footer && (
-          <div className="shrink-0 border-t border-surface-border px-7 py-4 bg-surface-card rounded-b-3xl">
+          <div className="shrink-0 border-t border-surface-border px-4 sm:px-7 py-3 sm:py-4 bg-surface-card rounded-b-3xl">
             {footer}
           </div>
         )}

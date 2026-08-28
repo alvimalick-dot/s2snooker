@@ -362,14 +362,16 @@ function GameTypeCard({
       {/* Subtypes table */}
       {gt.hasSubtypes && (
         <>
-          <div className="grid grid-cols-4 gap-3 text-[10px] text-slate-400 uppercase tracking-wider mb-2 px-1">
+          <div className="overflow-x-auto -mx-1 px-1">
+          <div className="min-w-[500px]">
+          <div className="grid grid-cols-4 gap-2 sm:gap-3 text-[10px] text-slate-400 uppercase tracking-wider mb-2 px-1">
             <div>Name</div>
             <div>Rate (Rs)</div>
             <div>Per Min (Rs)</div>
             <div>Window (min)</div>
           </div>
           {gt.subtypes.map((sub, subIdx) => (
-            <div key={sub._id ?? subIdx} className="grid grid-cols-4 gap-3 mb-2 items-center">
+            <div key={sub._id ?? subIdx} className="grid grid-cols-4 gap-2 sm:gap-3 mb-2 items-center">
               <input
                 value={sub.name}
                 onChange={(e) => onUpdateSub(subIdx, 'name' as any, e.target.value)}
@@ -403,6 +405,8 @@ function GameTypeCard({
               </div>
             </div>
           ))}
+          </div>
+          </div>
           <button
             onClick={onAddSub}
             className="mt-3 text-xs text-brass hover:text-brass-light font-semibold px-3 py-1.5 rounded-lg hover:bg-brass/10 transition-colors"

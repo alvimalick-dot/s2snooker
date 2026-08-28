@@ -52,27 +52,27 @@ export default function Header({
 
   return (
     <>
-      <header className="bg-surface-card border-b-2 border-surface-border px-6 py-4">
-        <div className="flex items-center justify-between">
+      <header className="bg-surface-card border-b-2 border-surface-border px-4 sm:px-6 py-3 sm:py-4">
+        <div className="flex items-center justify-between gap-3">
           {/* Logo + Club Name */}
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-available flex items-center justify-center shadow-card">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-available flex items-center justify-center shadow-card">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="sm:w-6 sm:h-6">
                 <circle cx="12" cy="12" r="10" fill="white" />
                 <circle cx="12" cy="12" r="5" fill="#16a34a" />
               </svg>
             </div>
-            <div>
-              <div className="text-xl font-extrabold text-ink tracking-tight">{clubName}</div>
-              <div className="text-xs text-slate-400 font-semibold uppercase tracking-widest">Table Management</div>
+            <div className="min-w-0">
+              <div className="text-base sm:text-xl font-extrabold text-ink tracking-tight truncate max-w-[140px] sm:max-w-none">{clubName}</div>
+              <div className="text-[10px] sm:text-xs text-slate-400 font-semibold uppercase tracking-widest hidden sm:block">Table Management</div>
             </div>
           </div>
 
-          {/* Nav tabs — big, bright */}
-          <nav className="flex items-center gap-2 bg-slate-800 rounded-2xl p-1.5">
+          {/* Nav tabs — responsive */}
+          <nav className="flex items-center gap-1 sm:gap-2 bg-slate-800 rounded-2xl p-1 sm:p-1.5 shrink-0">
             <button
               onClick={() => onTabChange('floor')}
-              className={`px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wide transition-all ${
+              className={`px-3 sm:px-6 py-2 sm:py-3 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wide transition-all ${
                 tab === 'floor'
                   ? 'bg-available text-white shadow-lg'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700'
@@ -80,7 +80,7 @@ export default function Header({
             >Live Floor</button>
             <button
               onClick={() => onTabChange('admin')}
-              className={`px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wide transition-all ${
+              className={`px-3 sm:px-6 py-2 sm:py-3 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wide transition-all ${
                 tab === 'admin'
                   ? 'bg-brass text-white shadow-lg'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700'
@@ -88,8 +88,8 @@ export default function Header({
             >Settings</button>
           </nav>
 
-          {/* Staff + Shift + Clock */}
-          <div className="flex items-center gap-4">
+          {/* Staff + Shift + Clock — hidden on very small screens, shown as a row */}
+          <div className="hidden md:flex items-center gap-4">
             <div className="flex items-center gap-2">
               <label className="text-xs text-slate-400 font-semibold uppercase">Staff</label>
               <input
@@ -120,16 +120,43 @@ export default function Header({
               {time ? time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
             </div>
           </div>
+
+          {/* Mobile compact controls */}
+          <div className="flex md:hidden items-center gap-2 shrink-0">
+            <input
+              value={staffName}
+              onChange={(e) => onStaffNameChange(e.target.value)}
+              placeholder="Name"
+              className="w-20 rounded-xl bg-slate-800 border-2 border-surface-border px-2 py-2 text-xs font-semibold text-white focus:outline-none focus:border-brass"
+            />
+            {activeShift ? (
+              <button
+                onClick={() => { setShowEndModal(true); setEndingCash(''); setShiftNotes(''); setReconciliation(null); }}
+                className="px-3 py-2 rounded-xl bg-occupied text-white text-xs font-bold"
+              >End</button>
+            ) : (
+              <button disabled={busy} onClick={handleStartShift}
+                className="px-3 py-2 rounded-xl bg-available text-white text-xs font-bold disabled:opacity-50"
+              >Start</button>
+            )}
+            <button onClick={onLogout}
+              className="px-2 py-2 rounded-xl bg-slate-800 border border-surface-border text-[10px] font-semibold text-slate-400">
+              ↩
+            </button>
+            <div className="font-mono text-xs font-bold text-ink tabular-nums">
+              {time ? time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+            </div>
+          </div>
         </div>
       </header>
 
       {/* Active shift banner */}
       {activeShift && (
-        <div className="bg-available-bg border-b-2 border-available/20 px-6 py-2 flex items-center justify-between">
+        <div className="bg-available-bg border-b-2 border-available/20 px-4 sm:px-6 py-2 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="w-3 h-3 rounded-full bg-available animate-pulse" />
-            <span className="text-available font-extrabold text-sm">SHIFT ACTIVE</span>
-            <span className="text-slate-300 font-semibold">
+            <span className="text-available font-extrabold text-xs sm:text-sm">SHIFT ACTIVE</span>
+            <span className="text-slate-300 font-semibold text-xs sm:text-sm">
               {activeShift.staffName} · started {new Date(activeShift.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
@@ -139,7 +166,7 @@ export default function Header({
       {/* End Shift Modal */}
       {showEndModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-surface-card rounded-3xl w-full max-w-lg p-8 shadow-xl">
+          <div className="bg-surface-card rounded-3xl w-full max-w-lg p-6 sm:p-8 shadow-xl">
             <div className="text-2xl font-extrabold text-ink mb-2">End Shift</div>
             <p className="text-base text-slate-400 mb-6">Count the cash drawer and enter the total.</p>
 
