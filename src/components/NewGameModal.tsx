@@ -57,6 +57,7 @@ export default function NewGameModal({
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const session = table.currentSession as any;
+  const isPaused = session?.isPaused ?? false;
 
   useEffect(() => {
     api.get<ClubConfig>('/api/config').then(setConfig).catch(() => {});
@@ -226,7 +227,7 @@ export default function NewGameModal({
         onClick={handleNewSession}
         className="px-5 py-3 rounded-xl text-base font-bold bg-occupied text-white shadow-md hover:bg-occupied/90 active:scale-[0.98] transition-all disabled:opacity-50"
       >
-        {busy ? '…' : `End & Start New Session`}
+        {busy ? '…' : `End Session`}
       </button>
       {/* Bill Now — primary action */}
       <button
@@ -255,6 +256,14 @@ export default function NewGameModal({
       busy={busy}
       footer={footer}
     >
+      {/* ── Pause Warning ──────────────────────────────────────── */}
+      {isPaused && (
+        <div className="mb-4 flex items-center gap-2 bg-reserved-bg border-2 border-reserved/30 rounded-xl px-4 py-3">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-reserved shrink-0"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+          <span className="text-sm font-bold text-reserved">Session is paused — the table may still be unavailable. Resume first or end the session.</span>
+        </div>
+      )}
+
       {/* ── Current Game Summary ──────────────────────────────── */}
       <div className="mb-4 rounded-xl border-2 border-occupied/20 bg-occupied-bg/30 overflow-hidden">
         <div className="px-4 py-2.5 bg-occupied/5 border-b border-occupied/10">

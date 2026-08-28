@@ -5,7 +5,7 @@ import { ShiftDoc } from '@/lib/types';
 import { api } from '@/lib/api';
 
 export default function Header({
-  clubName, tab, onTabChange, staffName, onStaffNameChange, activeShift, onShiftChange,
+  clubName, tab, onTabChange, staffName, onStaffNameChange, activeShift, onShiftChange, onLogout,
 }: {
   clubName: string;
   tab: 'floor' | 'admin';
@@ -14,6 +14,7 @@ export default function Header({
   onStaffNameChange: (name: string) => void;
   activeShift: ShiftDoc | null;
   onShiftChange: () => void;
+  onLogout: () => void;
 }) {
   const [time, setTime] = useState<Date | null>(null);
   const [busy, setBusy] = useState(false);
@@ -109,6 +110,11 @@ export default function Header({
                 className="px-5 py-3 rounded-xl bg-available text-white text-sm font-bold shadow-lg hover:bg-available/90 disabled:opacity-50"
               >Start Shift</button>
             )}
+
+            <button onClick={onLogout}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 border-2 border-surface-border text-sm font-semibold text-slate-400 hover:text-occupied hover:border-occupied/30 transition-all">
+              Logout
+            </button>
 
             <div className="font-mono text-lg font-bold text-ink tabular-nums min-w-[90px] text-right">
               {time ? time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}

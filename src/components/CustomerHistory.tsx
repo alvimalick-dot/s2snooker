@@ -391,47 +391,95 @@ function BillPopup({ customer, onClose, onPaid }: {
   onClose: () => void;
   onPaid: () => void;
 }) {
-  const [payBusy, setPayBusy] = useState(false);
+  const [payBusy, setPayBusy] = useState<string | null>(null); // null or session _id being paid
   const [payMethod, setPayMethod] = useState<'cash' | 'card' | 'account'>('cash');
 
   const sessions = customer.sessions ?? [];
+  const accountBalance = customer.accountBalance ?? 0;
+  const hasBalanceOnly = sessions.length === 0 && accountBalance > 0;
   const totalAll = sessions.reduce((sum, s) => sum + s.totalRevenue, 0);
   const totalPaid = sessions.reduce((sum, s) => {
     const paid = (s.settlements ?? []).reduce((ps: number, st: any) => st.amount > 0 ? ps + st.amount : ps, 0);
     return sum + paid;
   }, 0);
-  const totalRemaining = Math.max(0, totalAll - totalPaid);
-  const isFullyPaid = totalRemaining === 0 && totalAll > 0;
+  const sessionRemaining = Math.max(0, totalAll - totalPaid);
+  const totalRemaining = hasBalanceOnly ? accountBalance : sessionRemaining;
+  const isFullyPaid = !hasBalanceOnly && sessionRemaining === 0 && totalAll > 0;
 
-  async function handlePayAll() {
-    if (totalRemaining <= 0) return;
-    setPayBusy(true);
+  function sessionRem(s: any) {
+    const paid = (s.settlements ?? []).reduce((sum: number, st: any) => st.amount > 0 ? sum + st.amount : 0, 0);
+    return Math.max(0, s.totalRevenue - paid);
+  }
+
+  // Pay a single session
+  async function handlePaySession(s: any) {
+    if (!s._id) return;
+    const rem = sessionRem(s);
+    if (rem <= 0) return;
+    setPayBusy(s._id);
     try {
-      // Pay all unpaid sessions
-      const unpaidSessions = sessions.filter((s) => {
-        const paid = (s.settlements ?? []).reduce((sum: number, st: any) => st.amount > 0 ? sum + st.amount : 0, 0);
-        return paid < s.totalRevenue;
+      await api.patch('/api/customers/history', {
+        logId: s._id,
+        type: payMethod,
+        amount: rem,
       });
-
-      await Promise.all(
-        unpaidSessions.map(async (s) => {
-          if (!s._id) return;
-          const paid = (s.settlements ?? []).reduce((sum: number, st: any) => st.amount > 0 ? sum + st.amount : 0, 0);
-          const remaining = Math.max(0, s.totalRevenue - paid);
-          if (remaining > 0) {
-            await api.patch('/api/customers/history', {
-              logId: s._id,
-              type: payMethod,
-              amount: remaining,
-            });
-          }
-        })
-      );
       onPaid();
     } catch (e: any) {
       alert(e.message ?? 'Failed to record payment');
     } finally {
-      setPayBusy(false);
+      setPayBusy(null);
+    }
+  }
+
+  // Pay all remaining sessions at once
+  async function handlePayAll() {
+    if (totalRemaining <= 0) return;
+    setPayBusy('all');
+    try {
+      // Pay account balance first (from Bill Now charges)
+      if (hasBalanceOnly && accountBalance > 0) {
+        await api.patch('/api/customers/account', {
+          customerId: customer.customerId,
+          customerName: customer.customerName,
+          amount: accountBalance,
+          type: payMethod,
+        });
+      } else if (sessionRemaining > 0) {
+        // Pay all unpaid sessions
+        const unpaid = sessions.filter((s) => sessionRem(s) > 0 && s._id);
+        const results = await Promise.allSettled(
+          unpaid.map(async (s) => {
+            await api.patch('/api/customers/history', {
+              logId: s._id,
+              type: payMethod,
+              amount: sessionRem(s),
+            });
+          })
+        );
+        const failures = results.filter((r) => r.status === 'rejected');
+        if (failures.length > 0) {
+          alert(`${failures.length} payment(s) failed. ${unpaid.length - failures.length} succeeded.`);
+        }
+      }
+      onPaid();
+    } catch (e: any) {
+      alert(e.message ?? 'Failed to record payments');
+    } finally {
+      setPayBusy(null);
+    }
+  }
+
+  // Void (undo) a specific settlement
+  async function handleVoid(logId: string, settlementIdx: number) {
+    if (!confirm('Void this payment? The amount will be added back to the balance.')) return;
+    setPayBusy(logId);
+    try {
+      await api.del('/api/customers/history', { logId, settlementIdx });
+      onPaid();
+    } catch (e: any) {
+      alert(e.message ?? 'Failed to void payment');
+    } finally {
+      setPayBusy(null);
     }
   }
 
@@ -445,11 +493,11 @@ function BillPopup({ customer, onClose, onPaid }: {
       </button>
       {!isFullyPaid && (
         <button
-          disabled={payBusy}
+          disabled={payBusy !== null}
           onClick={handlePayAll}
           className="px-8 py-3 rounded-xl text-base font-bold bg-available text-white shadow-md hover:bg-available/90 active:scale-[0.98] transition-all disabled:opacity-50"
         >
-          {payBusy ? 'Processing…' : `💰 Pay Rs ${totalRemaining.toLocaleString()}`}
+          {payBusy === 'all' ? 'Processing…' : `💰 Pay All Rs ${totalRemaining.toLocaleString()}`}
         </button>
       )}
     </div>
@@ -460,16 +508,32 @@ function BillPopup({ customer, onClose, onPaid }: {
       title="Bill"
       subtitle={customer.customerName}
       onClose={onClose}
-      busy={payBusy}
+      busy={payBusy !== null}
       footer={footer}
       width="max-w-lg"
     >
+      {/* ── Balance-only customer (from Bill Now, no sessions today) */}
+      {hasBalanceOnly && (
+        <div className="mb-4 bg-occupied-bg/30 rounded-xl border-2 border-occupied/20 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-bold text-occupied">Outstanding Balance</div>
+              <div className="text-xs text-slate-400 font-semibold mt-0.5">Charged via Bill Now</div>
+            </div>
+            <span className="font-mono text-2xl font-extrabold text-occupied tabular-nums">
+              Rs {accountBalance.toLocaleString()}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* ── Paper receipt style ───────────────────────────────── */}
       <div className="space-y-0">
         {sessions.map((s, i) => {
-          const sessionPaid = (s.settlements ?? []).reduce((sum: number, st: any) => st.amount > 0 ? sum + st.amount : 0, 0);
-          const sessionRemaining = Math.max(0, s.totalRevenue - sessionPaid);
-          const isSessionPaid = sessionRemaining === 0 && s.totalRevenue > 0;
+          const sPaid = (s.settlements ?? []).reduce((sum: number, st: any) => st.amount > 0 ? sum + st.amount : 0, 0);
+          const sRemaining = sessionRem(s);
+          const isSessionPaid = sRemaining === 0 && s.totalRevenue > 0;
+          const isPaying = payBusy === s._id;
 
           return (
             <div key={i} className="border-b border-dashed border-surface-border py-3 last:border-b-0">
@@ -484,7 +548,7 @@ function BillPopup({ customer, onClose, onPaid }: {
                   </span>
                   {isSessionPaid ? (
                     <span className="text-[10px] font-bold text-available bg-available-bg border border-available/20 px-1.5 py-0.5 rounded">PAID</span>
-                  ) : sessionRemaining < s.totalRevenue ? (
+                  ) : sRemaining < s.totalRevenue ? (
                     <span className="text-[10px] font-bold text-reserved bg-reserved-bg border border-reserved/20 px-1.5 py-0.5 rounded">PARTIAL</span>
                   ) : null}
                 </div>
@@ -540,11 +604,36 @@ function BillPopup({ customer, onClose, onPaid }: {
                   </div>
                 )}
 
-                {/* Payment settled */}
-                {sessionPaid > 0 && (
+                {/* Payment settled with void option */}
+                {sPaid > 0 && (
                   <div className="flex items-center justify-between text-xs mt-1 pt-1 border-t border-surface-border border-dashed">
                     <span className="text-available font-semibold">Paid</span>
-                    <span className="font-mono text-available font-bold">-Rs {sessionPaid.toLocaleString()}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-available font-bold">-Rs {sPaid.toLocaleString()}</span>
+                      {(s.settlements ?? []).length > 0 && (
+                        <button
+                          onClick={() => handleVoid(s._id!, (s.settlements ?? []).length - 1)}
+                          disabled={payBusy !== null}
+                          className="text-occupied/60 hover:text-occupied text-[10px] font-bold transition-colors"
+                          title="Void last payment"
+                        >
+                          ✕ void
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Per-session pay button */}
+                {!isSessionPaid && sRemaining > 0 && (
+                  <div className="mt-2">
+                    <button
+                      disabled={payBusy !== null}
+                      onClick={() => handlePaySession(s)}
+                      className="w-full py-2.5 rounded-xl bg-available text-white text-sm font-bold shadow-md hover:bg-available/90 active:scale-[0.98] transition-all disabled:opacity-50"
+                    >
+                      {isPaying ? 'Processing…' : `💰 Pay Rs ${sRemaining.toLocaleString()}`}
+                    </button>
                   </div>
                 )}
               </div>

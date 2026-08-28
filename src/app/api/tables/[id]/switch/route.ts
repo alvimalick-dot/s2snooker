@@ -57,6 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const bill = computeSessionBill(
       {
         startTime: session.startTime,
+        billingMode: session.billingMode as any,
         pricingType: session.pricingType as any,
         hourlyRate: session.hourlyRate,
         flatPrice: session.flatPrice ?? undefined,

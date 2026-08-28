@@ -3,7 +3,7 @@ import { connectDB } from '@/lib/mongodb';
 import RevenueLog from '@/models/RevenueLog';
 import Table from '@/models/Table';
 import CustomerAccount from '@/models/CustomerAccount';
-import { fail } from '@/lib/utils';
+import { fail, ok } from '@/lib/utils';
 import { computeSessionBill } from '@/lib/billing';
 
 export const dynamic = 'force-dynamic';
@@ -205,8 +205,88 @@ export async function PATCH(req: NextRequest) {
     log.settlements.push(settlement as any);
     await log.save();
 
+    // Bug fix: Also decrement the CustomerAccount balance so the
+    // "Outstanding" stat and BillPopup suggestions stay accurate.
+    if (log.customerId || log.customerName) {
+      const account = log.customerId
+        ? await CustomerAccount.findOne({ customerId: log.customerId })
+        : await CustomerAccount.findOne({ customerName: log.customerName?.trim().toLowerCase() });
+      if (account) {
+        account.balance = Math.max(0, account.balance - Number(amount));
+        account.totalPaid += Number(amount);
+        account.transactions.push({
+          type: 'payment',
+          amount: -Number(amount),
+          description: description || `Payment via ${type}`,
+          sessionId: log._id,
+          staffName: staffName || 'Staff',
+          date: new Date(),
+        } as any);
+        await account.save();
+      }
+    }
+
     return NextResponse.json({ success: true, data: { logId, settlement } });
   } catch (err: any) {
     return fail(err.message ?? 'Failed to record payment', 500);
+  }
+}
+
+// DELETE /api/customers/history — void (undo) a settlement
+// body: { logId: string, settlementIdx: number }
+// Removes the settlement from the RevenueLog and adds the amount back to the CustomerAccount.
+export async function DELETE(req: NextRequest) {
+  try {
+    await connectDB();
+    const body = await req.json();
+    const { logId, settlementIdx } = body;
+
+    if (!logId || settlementIdx == null || settlementIdx < 0) {
+      return fail('logId and settlementIdx are required');
+    }
+
+    const log = await RevenueLog.findById(logId);
+    if (!log) return fail('Revenue log not found', 404);
+    if (!log.settlements || settlementIdx >= log.settlements.length) {
+      return fail('Invalid settlement index');
+    }
+
+    const settlement = (log.settlements as any)[settlementIdx];
+    if (!settlement) return fail('Settlement not found');
+
+    // Only void positive payments (not discounts/comps)
+    if (settlement.amount <= 0) {
+      return fail('Can only void positive payments');
+    }
+
+    const voidAmount = settlement.amount;
+
+    // Remove the settlement from RevenueLog
+    log.settlements.splice(settlementIdx, 1);
+    await log.save();
+
+    // Add the amount back to CustomerAccount
+    if (log.customerId || log.customerName) {
+      const account = log.customerId
+        ? await CustomerAccount.findOne({ customerId: log.customerId })
+        : await CustomerAccount.findOne({ customerName: log.customerName?.trim().toLowerCase() });
+      if (account) {
+        account.balance += voidAmount;
+        account.totalPaid = Math.max(0, account.totalPaid - voidAmount);
+        account.transactions.push({
+          type: 'adjustment',
+          amount: voidAmount,
+          description: `Voided payment: ${settlement.description || settlement.type}`,
+          sessionId: log._id,
+          staffName: 'System',
+          date: new Date(),
+        } as any);
+        await account.save();
+      }
+    }
+
+    return NextResponse.json({ success: true, data: { logId, voided: voidAmount } });
+  } catch (err: any) {
+    return fail(err.message ?? 'Failed to void payment', 500);
   }
 }

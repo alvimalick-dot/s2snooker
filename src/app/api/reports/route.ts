@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
         if (!t.currentSession) continue;
         const bill = computeSessionBill({
           startTime: t.currentSession.startTime,
+          billingMode: t.currentSession.billingMode,
           pricingType: t.currentSession.pricingType,
           hourlyRate: t.currentSession.hourlyRate,
           flatPrice: t.currentSession.flatPrice,

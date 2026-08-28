@@ -89,3 +89,45 @@ export async function POST(req: NextRequest) {
     return fail(err.message ?? 'Failed to create/update customer account', 500);
   }
 }
+
+// PATCH /api/customers/account — pay down a customer's outstanding balance
+// body: { customerId?: string, customerName?: string, amount: number, type: 'cash'|'card'|'account', description?: string, staffName?: string }
+export async function PATCH(req: NextRequest) {
+  try {
+    await connectDB();
+    const body = await req.json();
+    const { customerId, customerName, amount, type = 'cash', description = '', staffName = '' } = body;
+
+    if (!amount || amount <= 0) return fail('amount is required and must be positive');
+
+    // Find the account
+    let account;
+    if (customerId) {
+      account = await CustomerAccount.findOne({ customerId });
+    } else if (customerName) {
+      account = await CustomerAccount.findOne({ customerName: normName(customerName) });
+    }
+    if (!account) return fail('Customer account not found', 404);
+
+    // Validate payment doesn't exceed balance
+    if (Number(amount) > account.balance + 1) {
+      return fail(`Payment Rs ${amount} exceeds balance of Rs ${account.balance}`);
+    }
+
+    account.balance = Math.max(0, account.balance - Number(amount));
+    account.totalPaid += Number(amount);
+    account.transactions.push({
+      type: 'payment',
+      amount: -Number(amount),
+      description: description || `Paid via ${type}`,
+      sessionId: null,
+      staffName: staffName || 'Staff',
+      date: new Date(),
+    } as any);
+    await account.save();
+
+    return ok(account);
+  } catch (err: any) {
+    return fail(err.message ?? 'Failed to record payment', 500);
+  }
+}

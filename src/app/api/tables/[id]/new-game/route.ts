@@ -92,21 +92,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // ── 3. If billNow, charge the loser's CustomerAccount ───────
     if (billNow && loser) {
-      // Look up by name only — the loser may be different from the session owner
-      const account = await CustomerAccount.findOneAndUpdate(
-        { customerName: normName(loser) },
-        {
-          $setOnInsert: {
-            customerId: session.customerId,
-            customerName: normName(loser),
-            balance: 0,
-            totalCharged: 0,
-            totalPaid: 0,
-            transactions: [],
-          },
-        },
-        { upsert: true, new: true }
-      );
+      // Look up by name first — the loser may be different from the session owner
+      let account = await CustomerAccount.findOne({ customerName: normName(loser) });
+      if (!account) {
+        // New customer — give them their own customerId (not the session owner's)
+        account = await CustomerAccount.create({
+          customerId: nanoid(8),
+          customerName: normName(loser),
+          balance: 0,
+          totalCharged: 0,
+          totalPaid: 0,
+          transactions: [],
+        });
+      }
 
       // Add charge transaction
       const transaction = {
@@ -122,6 +120,44 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       account.totalCharged += roundTotal;
       account.transactions.push(transaction as any);
       await account.save();
+
+      // Also write a RevenueLog so this round's revenue appears in
+      // Financial Reports and daily reconciliation. Without this,
+      // Bill-Now revenue is invisible to the reports API.
+      const { businessDate } = await import('@/lib/billing');
+      await RevenueLog.create({
+        date: businessDate(now),
+        tableNumber: sourceTable.tableNumber,
+        isPrivateRoom: sourceTable.isPrivateRoom,
+        customerId: account.customerId ?? null,
+        customerName: loser,
+        tableRentalRevenue: bill.tableTotal,
+        menuSalesRevenue: bill.foodTotal,
+        totalRevenue: roundTotal,
+        pricingType: session.pricingType,
+        startTime: session.startTime,
+        endTime: now,
+        closedBy: 'System (Bill Now)',
+        items: (session.activeOrders ?? []).map((o: any) => ({
+          itemName: o.itemName,
+          quantity: o.quantity,
+          price: o.price,
+          isComp: o.isComp ?? false,
+          compReason: '',
+          discountPercent: o.discountPercent ?? 0,
+          lineTotal: o.price * o.quantity * (o.isComp ? 0 : (1 - (o.discountPercent ?? 0) / 100)),
+        })),
+        compTotal: bill.compTotal ?? 0,
+        discountTotal: bill.discountTotal ?? 0,
+        settlements: [{
+          type: 'account',
+          amount: roundTotal,
+          description: `Charged to ${loser}'s account via Bill Now`,
+          staffName: 'System',
+          date: now,
+        }],
+        accumulatedCharges: [],
+      });
     }
 
     // ── 4. Determine target table ───────────────────────────────

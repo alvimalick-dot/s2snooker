@@ -222,6 +222,48 @@ export async function GET(req: NextRequest) {
       paidResults.push(entry);
     }
 
+    // === CUSTOMER ACCOUNTS with outstanding balances (from Bill Now etc.) ===
+    // These may not have any sessions in RevenueLog for today but still owe money.
+    const accountsWithBalance = await CustomerAccount.find({
+      balance: { $gt: 0 },
+      isActive: true,
+    }).lean();
+
+    for (const acct of accountsWithBalance as any[]) {
+      const key = acct.customerId || normName(acct.customerName);
+      if (seen.has(key)) {
+        // Already in results — just update the balance
+        const existing = results.find((r) => r._groupKey === key);
+        if (existing) {
+          existing.accountBalance = acct.balance;
+        }
+        continue;
+      }
+      seen.add(key);
+      // Check if this customer has any ended sessions today
+      const existingInMap = customerMap.get(key);
+      if (existingInMap) {
+        // Has sessions today — merge balance into it
+        existingInMap.accountBalance = acct.balance;
+        existingInMap.totalPaid = acct.totalPaid;
+        continue;
+      }
+      // No sessions today — add as a balance-only entry
+      const entry = {
+        _groupKey: key,
+        customerId: acct.customerId ?? null,
+        customerName: acct.customerName,
+        status: 'ended' as const,
+        paymentStatus: 'unpaid' as const,
+        sessions: [] as any[],
+        totalSpent: 0,
+        accountBalance: acct.balance,
+        totalPaid: acct.totalPaid,
+      };
+      results.push(entry);
+      paidResults.push(entry);
+    }
+
     // Compute counts for all three tabs
     // "ended" customers are those whose sessions are all in RevenueLog (not active)
     const endedCount = paidResults.length;

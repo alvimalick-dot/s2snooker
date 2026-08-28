@@ -17,6 +17,7 @@ import TableRatesManager from '@/components/TableRatesManager';
 import RevenueReport from '@/components/RevenueReport';
 import CustomerHistory from '@/components/CustomerHistory';
 import Sidebar, { AdminTab } from '@/components/Sidebar';
+import LoginScreen from '@/components/LoginScreen';
 
 const POLL_MS = 4000;
 const CLUB_NAME = process.env.NEXT_PUBLIC_CLUB_NAME || 'The Break Snooker Club';
@@ -47,6 +48,8 @@ function FitGrid<T extends { _id: string }>({
 }
 
 export default function DashboardPage() {
+  const [authenticated, setAuthenticated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [tab, setTab] = useState<'floor' | 'admin'>('floor');
   const [adminTab, setAdminTab] = useState<AdminTab>('rates');
   const [tables, setTables] = useState<TableDoc[]>([]);
@@ -99,11 +102,20 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // Check auth on mount
   useEffect(() => {
+    const authed = localStorage.getItem('snooker-auth') === '1';
+    setAuthenticated(authed);
+    setAuthChecked(true);
+  }, []);
+
+  // Load data only when authenticated
+  useEffect(() => {
+    if (!authenticated) return;
     refresh();
     const id = setInterval(refresh, POLL_MS);
     return () => clearInterval(id);
-  }, [refresh]);
+  }, [authenticated, refresh]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem('snooker-staff-name');
@@ -113,6 +125,11 @@ export default function DashboardPage() {
   function updateStaffName(name: string) {
     setStaffName(name);
     window.localStorage.setItem('snooker-staff-name', name);
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('snooker-auth');
+    setAuthenticated(false);
   }
 
   // keep open modals fresh
@@ -138,6 +155,10 @@ export default function DashboardPage() {
   const mainTables = tables.filter((t) => !t.isPrivateRoom);
   const privateTables = tables.filter((t) => t.isPrivateRoom);
 
+  // Auth gate — show login if not authenticated
+  if (!authChecked) return null;
+  if (!authenticated) return <LoginScreen onLogin={() => setAuthenticated(true)} />;
+
   return (
     <div className="h-dvh flex flex-col bg-surface-dark">
       <Header
@@ -148,6 +169,7 @@ export default function DashboardPage() {
         onStaffNameChange={updateStaffName}
         activeShift={activeShift}
         onShiftChange={refresh}
+        onLogout={handleLogout}
       />
 
       <div className="flex-1 flex overflow-hidden">

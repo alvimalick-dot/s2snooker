@@ -89,23 +89,32 @@ export default function RevenueReport() {
 
     autoTable(doc, {
       startY: 28,
-      head: [['Date', 'Table', 'Customer', 'Pricing', 'Table Rs', 'Menu Rs', 'Total Rs', 'Status']],
-      body: report.logs.map((l) => [
-        new Date(l.date).toLocaleDateString(),
-        l.isPrivateRoom ? `Room ${l.tableNumber}` : `Table ${l.tableNumber}`,
-        l.customerName || '—',
-        l.pricingType,
-        l.tableRentalRevenue.toLocaleString(),
-        l.menuSalesRevenue.toLocaleString(),
-        l.totalRevenue.toLocaleString(),
-        getPaymentStatus(l.totalRevenue, l.settlements ?? []),
-      ]),
+      head: [['Date', 'Table', 'Customer', 'Pricing', 'Games', 'Table Rs', 'Menu Rs', 'Total Rs', 'Paid', 'Status']],
+      body: report.logs.map((l) => {
+        const acc = (l as any).accumulatedCharges ?? [];
+        const accLabel = acc.length > 0
+          ? `${acc.length} games (${acc.map((c: any) => c.loser ? `${c.loser} lost` : '').filter(Boolean).join(', ')})`
+          : '—';
+        const paid = (l.settlements ?? []).reduce((s: number, st: any) => st.amount > 0 ? s + st.amount : 0, 0);
+        return [
+          new Date(l.date).toLocaleDateString(),
+          l.isPrivateRoom ? `Room ${l.tableNumber}` : `Table ${l.tableNumber}`,
+          l.customerName || '—',
+          l.pricingType,
+          accLabel,
+          l.tableRentalRevenue.toLocaleString(),
+          l.menuSalesRevenue.toLocaleString(),
+          l.totalRevenue.toLocaleString(),
+          paid > 0 ? `Rs ${paid.toLocaleString()}` : '—',
+          getPaymentStatus(l.totalRevenue, l.settlements ?? []),
+        ];
+      }),
       foot: [[
-        '', '', '',
-        'Totals',
+        '', '', '', '', '',
         report.totals.tableRentalRevenue.toLocaleString(),
         report.totals.menuSalesRevenue.toLocaleString(),
         report.totals.totalRevenue.toLocaleString(),
+        totalPaid > 0 ? `Rs ${totalPaid.toLocaleString()}` : '',
         '',
       ]],
       theme: 'grid',
