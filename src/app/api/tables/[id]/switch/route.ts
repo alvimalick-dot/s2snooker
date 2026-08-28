@@ -32,6 +32,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     if (!body.targetTableId) return fail('targetTableId is required');
     if (body.targetTableId === params.id) return fail('Cannot switch a table to itself');
+    if (body.hourlyRate != null && (typeof body.hourlyRate !== 'number' || body.hourlyRate <= 0)) return fail('hourlyRate must be a positive number');
+    if (body.flatPrice != null && (typeof body.flatPrice !== 'number' || body.flatPrice < 0)) return fail('flatPrice must be a non-negative number');
 
     const sourceTable = await Table.findById(params.id);
     if (!sourceTable) return fail('Source table not found', 404);

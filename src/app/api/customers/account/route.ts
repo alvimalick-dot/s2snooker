@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
 
     const customerName = body.customerName?.trim();
     if (!customerName) return fail('customerName is required');
+    if (customerName.length > 100) return fail('customerName cannot exceed 100 characters');
     const customerId = body.customerId ?? null;
 
     // When a customerId is provided, look up by customerId first — this
@@ -98,7 +99,8 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const { customerId, customerName, amount, type = 'cash', description = '', staffName = '' } = body;
 
-    if (!amount || amount <= 0) return fail('amount is required and must be positive');
+    if (typeof amount !== 'number' || amount <= 0) return fail('amount is required and must be a positive number');
+    if (amount < 1) return fail('amount must be at least Rs 1');
 
     // Find the account
     let account;

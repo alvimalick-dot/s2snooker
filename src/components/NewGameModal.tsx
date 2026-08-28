@@ -162,7 +162,10 @@ export default function NewGameModal({
 
   async function handleAction(billNow: boolean) {
     if (!gameType) { setError('Pick a game type.'); return; }
+    if (gameType.hasSubtypes && (!subtype || subtype.price <= 0)) { setError('Select a valid game option.'); return; }
+    if (!gameType.hasSubtypes && gameType.flatPrice <= 0) { setError('Game type has no price configured.'); return; }
     if (billNow && !loser) { setError('Enter the loser\'s name to bill them.'); return; }
+    if (loser.length > 100) { setError('Loser name cannot exceed 100 characters.'); return; }
     setBusy(true);
     setError(null);
     try {
@@ -197,6 +200,7 @@ export default function NewGameModal({
   // End current session and start fresh (for different player pairs)
   async function handleNewSession() {
     if (!loser) { setError('Enter the loser\'s name to end this session.'); return; }
+    if (loser.length > 100) { setError('Loser name cannot exceed 100 characters.'); return; }
     setBusy(true);
     setError(null);
     try {
@@ -348,6 +352,7 @@ export default function NewGameModal({
           onBlur={() => { setTimeout(() => setShowSuggestions(false), 150); }}
           onKeyDown={handleNameKeyDown}
           placeholder="Enter loser's name"
+          maxLength={100}
           autoFocus
           className="w-full rounded-xl bg-slate-800 border-2 border-surface-border px-4 py-3 text-base font-semibold text-white focus:outline-none focus:border-brass transition-colors"
         />

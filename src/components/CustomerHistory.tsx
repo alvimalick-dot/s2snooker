@@ -394,6 +394,8 @@ function BillPopup({ customer, onClose, onPaid }: {
 }) {
   const [payBusy, setPayBusy] = useState<string | null>(null); // null or session _id being paid
   const [payMethod, setPayMethod] = useState<'cash' | 'card' | 'account'>('cash');
+  const [discount, setDiscount] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
 
   const sessions = customer.sessions ?? [];
   const accountBalance = customer.accountBalance ?? 0;
@@ -404,12 +406,22 @@ function BillPopup({ customer, onClose, onPaid }: {
     return sum + paid;
   }, 0);
   const sessionRemaining = Math.max(0, totalAll - totalPaid);
-  const totalRemaining = hasBalanceOnly ? accountBalance : sessionRemaining;
+  const rawRemaining = hasBalanceOnly ? accountBalance : sessionRemaining;
+  // Calculate already-applied discounts from existing settlements
+  const existingDiscount = sessions.reduce((sum, s) => {
+    return sum + Math.abs((s.settlements ?? []).reduce((d: number, st: any) => st.amount < 0 ? d + st.amount : d, 0));
+  }, 0);
+  const maxDiscount = Math.max(0, rawRemaining - existingDiscount);
+
+  const rawDiscount = Math.max(0, Number(discount) || 0);
+  const isDiscountOverMax = rawDiscount > maxDiscount && maxDiscount > 0;
+  const discountAmount = Math.min(rawDiscount, maxDiscount);
+  const totalRemaining = Math.max(0, rawRemaining - existingDiscount - discountAmount);
   const isFullyPaid = !hasBalanceOnly && sessionRemaining === 0 && totalAll > 0;
 
   function sessionRem(s: any) {
-    const paid = (s.settlements ?? []).reduce((sum: number, st: any) => st.amount > 0 ? sum + st.amount : 0, 0);
-    return Math.max(0, s.totalRevenue - paid);
+    const settled = (s.settlements ?? []).reduce((sum: number, st: any) => sum + st.amount, 0);
+    return Math.max(0, s.totalRevenue - settled);
   }
 
   // Pay a single session
@@ -417,6 +429,7 @@ function BillPopup({ customer, onClose, onPaid }: {
     if (!s._id) return;
     const rem = sessionRem(s);
     if (rem <= 0) return;
+    if (!confirm(`Pay Rs ${rem.toLocaleString()} for this session?`)) return;
     setPayBusy(s._id);
     try {
       await api.patch('/api/customers/history', {
@@ -432,34 +445,99 @@ function BillPopup({ customer, onClose, onPaid }: {
     }
   }
 
+  // Apply discount to unpaid sessions (proportional split)
+  async function applyDiscount(): Promise<boolean> {
+    if (discountAmount <= 0) return true;
+    const unpaid = sessions.filter((s) => sessionRem(s) > 0 && s._id);
+    if (unpaid.length === 0) return true;
+
+    let remaining = discountAmount;
+    for (const s of unpaid) {
+      if (remaining <= 0) break;
+      const sRem = sessionRem(s);
+      // Proportional share of discount for this session
+      const share = Math.min(remaining, Math.round(discountAmount * (sRem / sessionRemaining)) || remaining);
+      const amount = Math.min(share, sRem);
+      if (amount <= 0) continue;
+      await api.patch('/api/customers/history', {
+        logId: s._id,
+        type: 'discount',
+        amount: 0,
+        discount: amount,
+        description: discountReason || 'Discount applied',
+      });
+      remaining -= amount;
+    }
+    // Any rounding remainder goes to first session
+    if (remaining > 0 && unpaid.length > 0 && unpaid[0]._id) {
+      await api.patch('/api/customers/history', {
+        logId: unpaid[0]._id,
+        type: 'discount',
+        amount: 0,
+        discount: remaining,
+        description: discountReason || 'Discount applied',
+      });
+    }
+    return true;
+  }
+
   // Pay all remaining sessions at once
   async function handlePayAll() {
-    if (totalRemaining <= 0) return;
+    if (rawRemaining <= 0 || isDiscountOverMax) return;
     setPayBusy('all');
     try {
+      // Apply discount first if any
+      if (discountAmount > 0) {
+        await applyDiscount();
+      }
+
       // Pay account balance first (from Bill Now charges)
       if (hasBalanceOnly && accountBalance > 0) {
-        await api.patch('/api/customers/account', {
-          customerId: customer.customerId,
-          customerName: customer.customerName,
-          amount: accountBalance,
-          type: payMethod,
-        });
+        const payAmount = discountAmount > 0 ? Math.max(0, accountBalance - discountAmount) : accountBalance;
+        if (payAmount > 0) {
+          await api.patch('/api/customers/account', {
+            customerId: customer.customerId,
+            customerName: customer.customerName,
+            amount: payAmount,
+            type: payMethod,
+          });
+        }
       } else if (sessionRemaining > 0) {
-        // Pay all unpaid sessions
+        // Recalculate remaining after discount applied
         const unpaid = sessions.filter((s) => sessionRem(s) > 0 && s._id);
-        const results = await Promise.allSettled(
-          unpaid.map(async (s) => {
-            await api.patch('/api/customers/history', {
-              logId: s._id,
-              type: payMethod,
-              amount: sessionRem(s),
-            });
-          })
-        );
-        const failures = results.filter((r) => r.status === 'rejected');
-        if (failures.length > 0) {
-          alert(`${failures.length} payment(s) failed. ${unpaid.length - failures.length} succeeded.`);
+        if (discountAmount > 0) {
+          // Re-fetch to get updated remaining amounts after discount
+          const results = await Promise.allSettled(
+            unpaid.map(async (s) => {
+              const rem = sessionRem(s);
+              if (rem <= 0) return;
+              // Discount already applied, just pay what's left
+              await api.patch('/api/customers/history', {
+                logId: s._id,
+                type: payMethod,
+                amount: rem,
+              });
+            })
+          );
+          const failures = results.filter((r) => r.status === 'rejected');
+          if (failures.length > 0) {
+            alert(`${failures.length} payment(s) failed. ${unpaid.length - failures.length} succeeded.`);
+          }
+        } else {
+          // No discount — pay all unpaid sessions
+          const results = await Promise.allSettled(
+            unpaid.map(async (s) => {
+              await api.patch('/api/customers/history', {
+                logId: s._id,
+                type: payMethod,
+                amount: sessionRem(s),
+              });
+            })
+          );
+          const failures = results.filter((r) => r.status === 'rejected');
+          if (failures.length > 0) {
+            alert(`${failures.length} payment(s) failed. ${unpaid.length - failures.length} succeeded.`);
+          }
         }
       }
       onPaid();
@@ -471,19 +549,6 @@ function BillPopup({ customer, onClose, onPaid }: {
   }
 
   // Void (undo) a specific settlement
-  async function handleVoid(logId: string, settlementIdx: number) {
-    if (!confirm('Void this payment? The amount will be added back to the balance.')) return;
-    setPayBusy(logId);
-    try {
-      await api.del('/api/customers/history', { logId, settlementIdx });
-      onPaid();
-    } catch (e: any) {
-      alert(e.message ?? 'Failed to void payment');
-    } finally {
-      setPayBusy(null);
-    }
-  }
-
   const footer = (
     <div className="flex gap-3 justify-end">
       <button
@@ -494,11 +559,11 @@ function BillPopup({ customer, onClose, onPaid }: {
       </button>
       {!isFullyPaid && (
         <button
-          disabled={payBusy !== null}
+          disabled={payBusy !== null || isDiscountOverMax}
           onClick={handlePayAll}
           className="px-8 py-3 rounded-xl text-base font-bold bg-available text-white shadow-md hover:bg-available/90 active:scale-[0.98] transition-all disabled:opacity-50"
         >
-          {payBusy === 'all' ? 'Processing…' : `💰 Pay All Rs ${totalRemaining.toLocaleString()}`}
+          {payBusy === 'all' ? 'Processing…' : discountAmount > 0 ? `💰 Pay Rs ${totalRemaining.toLocaleString()}` : `💰 Pay All Rs ${totalRemaining.toLocaleString()}`}
         </button>
       )}
     </div>
@@ -605,23 +670,19 @@ function BillPopup({ customer, onClose, onPaid }: {
                   </div>
                 )}
 
-                {/* Payment settled with void option */}
+                {/* Existing discounts */}
+                {(s.settlements ?? []).filter((st: any) => st.amount < 0).map((st: any, si: number) => (
+                  <div key={`disc-${si}`} className="flex items-center justify-between text-xs mt-1 pt-1 border-t border-occupied/10 border-dashed">
+                    <span className="text-occupied font-semibold">Discount{st.description ? `: ${st.description}` : ''}</span>
+                    <span className="font-mono text-occupied font-bold">-Rs {Math.abs(st.amount).toLocaleString()}</span>
+                  </div>
+                ))}
+
+                {/* Payment settled */}
                 {sPaid > 0 && (
                   <div className="flex items-center justify-between text-xs mt-1 pt-1 border-t border-surface-border border-dashed">
                     <span className="text-available font-semibold">Paid</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-available font-bold">-Rs {sPaid.toLocaleString()}</span>
-                      {(s.settlements ?? []).length > 0 && (
-                        <button
-                          onClick={() => handleVoid(s._id!, (s.settlements ?? []).length - 1)}
-                          disabled={payBusy !== null}
-                          className="text-occupied/60 hover:text-occupied text-[10px] font-bold transition-colors"
-                          title="Void last payment"
-                        >
-                          ✕ void
-                        </button>
-                      )}
-                    </div>
+                    <span className="font-mono text-available font-bold">-Rs {sPaid.toLocaleString()}</span>
                   </div>
                 )}
 
@@ -660,6 +721,12 @@ function BillPopup({ customer, onClose, onPaid }: {
             <span className="font-mono text-available font-bold">-Rs {totalPaid.toLocaleString()}</span>
           </div>
         )}
+        {discountAmount > 0 && (
+          <div className="flex items-center justify-between text-sm mt-1">
+            <span className="text-occupied font-semibold">Discount{discountReason ? ` (${discountReason})` : ''}</span>
+            <span className="font-mono text-occupied font-bold">-Rs {discountAmount.toLocaleString()}</span>
+          </div>
+        )}
         {totalRemaining > 0 && (
           <div className="flex items-center justify-between text-lg mt-1 pt-1.5 border-t border-brass/20">
             <span className="text-ink font-extrabold">Remaining</span>
@@ -671,8 +738,62 @@ function BillPopup({ customer, onClose, onPaid }: {
         )}
       </div>
 
+      {/* ── Discount (only if something is owed and not fully paid) ── */}
+      {!isFullyPaid && rawRemaining > 0 && (
+        <div className="mt-4 rounded-xl border-2 border-occupied/20 bg-occupied-bg/30 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[11px] text-occupied font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              Discount
+            </div>
+            {discountAmount > 0 && (
+              <span className="font-mono text-sm font-bold text-occupied">-Rs {(existingDiscount + discountAmount).toLocaleString()}</span>
+            )}
+          </div>
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label className="block text-[10px] text-slate-400 uppercase mb-1">Amount (Rs)</label>
+              <input
+                type="number"
+                value={discount}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '' || (Number(v) >= 0 && !v.includes('-'))) setDiscount(v);
+                }}
+                placeholder="0"
+                min={0}
+                max={maxDiscount}
+                className={`w-full rounded-xl bg-slate-800 border-2 px-4 py-3 text-lg font-mono font-bold text-occupied focus:outline-none ${
+                  isDiscountOverMax ? 'border-occupied focus:border-occupied' : 'border-surface-border focus:border-occupied/50'
+                }`}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-[10px] text-slate-400 uppercase mb-1">Reason (optional)</label>
+              <input
+                value={discountReason}
+                onChange={(e) => setDiscountReason(e.target.value.slice(0, 100))}
+                placeholder="e.g. Loyal customer"
+                maxLength={100}
+                className="w-full rounded-xl bg-slate-800 border-2 border-surface-border px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-occupied/50"
+              />
+            </div>
+          </div>
+          {isDiscountOverMax && (
+            <div className="mt-2 text-xs text-occupied font-semibold">
+              ⚠ Discount cannot exceed Rs {maxDiscount.toLocaleString()}{existingDiscount > 0 ? ` (Rs ${existingDiscount.toLocaleString()} already discounted)` : ''}
+            </div>
+          )}
+          {discountAmount > 0 && !isDiscountOverMax && (
+            <div className="mt-2 text-xs text-slate-400 font-semibold">
+              Customer pays <span className="text-available font-bold">Rs {totalRemaining.toLocaleString()}</span> instead of Rs {rawRemaining.toLocaleString()}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Payment method (only if something is owed) ────────── */}
-      {!isFullyPaid && totalRemaining > 0 && (
+      {!isFullyPaid && rawRemaining > 0 && (
         <div className="mt-4">
           <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2">Payment Method</div>
           <div className="grid grid-cols-3 gap-2">

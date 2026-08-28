@@ -32,13 +32,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await connectDB();
     const body = await req.json();
 
+    if (!body.gameType) return fail('gameType is required');
+    if (typeof body.hourlyRate !== 'number' || body.hourlyRate <= 0) return fail('hourlyRate must be a positive number');
+    if (body.flatPrice != null && (typeof body.flatPrice !== 'number' || body.flatPrice < 0)) return fail('flatPrice must be a non-negative number');
+
     const sourceTable = await Table.findById(params.id);
     if (!sourceTable) return fail('Table not found', 404);
     if (!sourceTable.currentSession) return fail('No active session on this table', 409);
 
     const session = sourceTable.currentSession as any;
     const now = new Date();
-    const loser = (body.loser ?? '').trim();
+    const loser = (body.loser ?? '').trim().slice(0, 100);
 
     // ── 1. Compute the current game's bill ──────────────────────
     const bill = computeSessionBill(

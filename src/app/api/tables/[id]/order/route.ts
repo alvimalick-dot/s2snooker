@@ -18,6 +18,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (typeof quantity !== 'number' || !Number.isInteger(quantity) || quantity < 1) {
       return fail('quantity must be a whole number of at least 1');
     }
+    if (quantity > 50) {
+      return fail('quantity cannot exceed 50 per order');
+    }
 
     const table = await Table.findById(params.id);
     if (!table) return fail('Table not found', 404);

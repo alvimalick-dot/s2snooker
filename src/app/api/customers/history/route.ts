@@ -179,10 +179,66 @@ export async function PATCH(req: NextRequest) {
   try {
     await connectDB();
     const body = await req.json();
-    const { logId, type = 'cash', amount, staffName = '', description = '' } = body;
+    const { logId, type = 'cash', amount, staffName = '', description = '', discount } = body;
 
-    if (!logId || amount == null || amount <= 0) {
+    const discountAmount = Number(discount) || 0;
+    const paymentAmount = Number(amount) || 0;
+    const trimmedDesc = (description || '').trim().slice(0, 100);
+
+    // Discount-only call (no payment, just reduce the bill)
+    if (discountAmount > 0 && paymentAmount <= 0) {
+      if (!logId) return fail('logId is required');
+      if (discountAmount < 1) return fail('Discount must be at least Rs 1');
+
+      const log = await RevenueLog.findById(logId);
+      if (!log) return fail('Revenue log not found', 404);
+
+      // Check discount doesn't exceed what's owed
+      const alreadyPaid = (log.settlements ?? []).reduce((sum: number, s: any) => s.amount > 0 ? sum + s.amount : 0, 0);
+      const alreadyDiscounted = Math.abs((log.settlements ?? []).reduce((sum: number, s: any) => s.amount < 0 ? sum + s.amount : 0, 0));
+      const remaining = Math.max(0, log.totalRevenue - alreadyPaid - alreadyDiscounted);
+      if (discountAmount > remaining + 1) {
+        return fail(`Discount Rs ${discountAmount} exceeds remaining balance of Rs ${remaining}. Max discount: Rs ${Math.floor(remaining)}`);
+      }
+
+      const settlement = {
+        type: 'discount',
+        amount: -discountAmount,
+        description: trimmedDesc || 'Discount applied',
+        staffName: staffName || 'Staff',
+        date: new Date(),
+      };
+
+      log.settlements.push(settlement as any);
+      await log.save();
+
+      // Also update CustomerAccount if exists
+      if (log.customerId || log.customerName) {
+        const account = log.customerId
+          ? await CustomerAccount.findOne({ customerId: log.customerId })
+          : await CustomerAccount.findOne({ customerName: log.customerName?.trim().toLowerCase() });
+        if (account) {
+          account.balance = Math.max(0, account.balance - discountAmount);
+          account.transactions.push({
+            type: 'discount',
+            amount: -discountAmount,
+            description: trimmedDesc || 'Discount applied',
+            sessionId: log._id,
+            staffName: staffName || 'Staff',
+            date: new Date(),
+          } as any);
+          await account.save();
+        }
+      }
+
+      return NextResponse.json({ success: true, data: { logId, settlement } });
+    }
+
+    if (!logId || paymentAmount <= 0) {
       return fail('logId and a positive amount are required');
+    }
+    if (paymentAmount < 1) {
+      return fail('Payment must be at least Rs 1');
     }
 
     // Validate payment doesn't exceed remaining balance
@@ -190,13 +246,13 @@ export async function PATCH(req: NextRequest) {
     if (!log) return fail('Revenue log not found', 404);
     const alreadyPaid = (log.settlements ?? []).reduce((sum: number, s: any) => s.amount > 0 ? sum + s.amount : 0, 0);
     const remaining = Math.max(0, log.totalRevenue - alreadyPaid);
-    if (Number(amount) > remaining + 1) {
-      return fail(`Payment Rs ${amount} exceeds remaining balance of Rs ${remaining}`);
+    if (paymentAmount > remaining + 1) {
+      return fail(`Payment Rs ${paymentAmount} exceeds remaining balance of Rs ${Math.floor(remaining)}`);
     }
 
     const settlement = {
       type,
-      amount: Number(amount),
+      amount: paymentAmount,
       description: description || `Marked as paid`,
       staffName,
       date: new Date(),
@@ -212,11 +268,11 @@ export async function PATCH(req: NextRequest) {
         ? await CustomerAccount.findOne({ customerId: log.customerId })
         : await CustomerAccount.findOne({ customerName: log.customerName?.trim().toLowerCase() });
       if (account) {
-        account.balance = Math.max(0, account.balance - Number(amount));
-        account.totalPaid += Number(amount);
+        account.balance = Math.max(0, account.balance - paymentAmount);
+        account.totalPaid += paymentAmount;
         account.transactions.push({
           type: 'payment',
-          amount: -Number(amount),
+          amount: -paymentAmount,
           description: description || `Payment via ${type}`,
           sessionId: log._id,
           staffName: staffName || 'Staff',

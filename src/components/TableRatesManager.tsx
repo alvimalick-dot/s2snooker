@@ -86,8 +86,8 @@ export default function TableRatesManager() {
   function addSubtype(section: Section, typeIdx: number) {
     applyChange(section, (types) => {
       const updated = JSON.parse(JSON.stringify(types));
-      const defaultRate = section === 'room' ? 15 : 8;
-      updated[typeIdx].subtypes.push({ name: 'New Game', price: 200, perMinuteRate: defaultRate, gameMinutes: 25 });
+      const defaultRate = 8;
+      updated[typeIdx].subtypes.push({ name: 'New Game', price: 200, perMinuteRate: 8, gameMinutes: 25 });
       return updated;
     });
   }
@@ -103,11 +103,11 @@ export default function TableRatesManager() {
 
   function addGameType(section: Section) {
     if (!config || !newTypeName.trim()) return;
-    const defaultRate = section === 'room' ? 15 : 8;
+    const defaultRate = section === 'room' ? 20 : 8;
     const newType: GameType = {
       name: newTypeName.trim(),
       hasSubtypes: false,
-      flatPrice: 0,
+      flatPrice: section === 'room' ? 1200 : 0,
       perMinuteRate: defaultRate,
       subtypes: [],
     };

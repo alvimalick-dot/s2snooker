@@ -1,11 +1,10 @@
 'use client';
 
-export type AdminTab = 'rates' | 'menu' | 'customers' | 'reports';
+export type AdminTab = 'rates' | 'menu' | 'reports';
 
 const NAV_ITEMS: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'rates', label: 'Game Rates', icon: '🏷️' },
   { key: 'menu', label: 'Menu Items', icon: '🍽️' },
-  { key: 'customers', label: 'Customers', icon: '👥' },
   { key: 'reports', label: 'Reports', icon: '📊' },
 ];
 

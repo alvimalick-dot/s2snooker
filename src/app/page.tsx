@@ -48,7 +48,7 @@ function FitGrid<T extends { _id: string }>({
 }
 
 function useWindowWidth() {
-  const [width, setWidth] = useState(0);
+  const [width, setWidth] = useState(1440);
   useEffect(() => {
     setWidth(window.innerWidth);
     function handleResize() { setWidth(window.innerWidth); }
@@ -62,6 +62,7 @@ export default function DashboardPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [tab, setTab] = useState<'floor' | 'admin'>('floor');
+  const [floorSubTab, setFloorSubTab] = useState<'dashboard' | 'customers'>('dashboard');
   const [adminTab, setAdminTab] = useState<AdminTab>('rates');
   const [tables, setTables] = useState<TableDoc[]>([]);
   const [menu, setMenu] = useState<MenuItemDoc[]>([]);
@@ -199,11 +200,31 @@ export default function DashboardPage() {
               </div>
             )}
 
-            <div className="shrink-0">
+            {/* Floor sub-tabs: Dashboard | Customers */}
+            <div className="shrink-0 flex items-center justify-between gap-3">
               <StatsStrip tables={tables} todayRevenue={todayRevenue} customerAccounts={customerAccounts} />
+              <nav className="flex items-center gap-1 bg-slate-800 rounded-2xl p-1 shrink-0">
+                <button
+                  onClick={() => setFloorSubTab('dashboard')}
+                  className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wide transition-all ${
+                    floorSubTab === 'dashboard'
+                      ? 'bg-available text-white shadow-lg'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                  }`}
+                >📊 Dashboard</button>
+                <button
+                  onClick={() => setFloorSubTab('customers')}
+                  className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wide transition-all ${
+                    floorSubTab === 'customers'
+                      ? 'bg-brass text-white shadow-lg'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                  }`}
+                >👥 Customers</button>
+              </nav>
             </div>
 
-            {tables.length > 0 ? (
+            {/* Dashboard sub-tab */}
+            {floorSubTab === 'dashboard' && tables.length > 0 ? (
               <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 sm:gap-4 overflow-hidden">
                 <div className="flex-1 min-h-0 flex flex-col">
                   <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-slate-400 mb-2 sm:mb-3">Standard Tables</div>
@@ -243,12 +264,19 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
-            ) : !loading ? (
+            ) : floorSubTab === 'dashboard' && !loading ? (
               <div className="text-center py-12 text-slate-400">
                 <div className="text-lg font-bold mb-2">No tables configured</div>
                 <div className="text-sm">Run /api/seed to initialize tables and rates.</div>
               </div>
             ) : null}
+
+            {/* Customers sub-tab */}
+            {floorSubTab === 'customers' && (
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <CustomerHistory />
+              </div>
+            )}
           </main>
         )}
 
@@ -257,10 +285,9 @@ export default function DashboardPage() {
           <>
             <Sidebar active={adminTab} onSelect={setAdminTab} />
             <main className="flex-1 min-h-0 overflow-hidden p-3 sm:p-6 flex flex-col">
-              <div className={`flex-1 min-h-0 ${adminTab === 'customers' ? 'overflow-y-auto' : 'overflow-y-auto rounded-2xl border-2 border-surface-border bg-surface-card/40'}`}>
+              <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl border-2 border-surface-border bg-surface-card/40">
                 {adminTab === 'rates' && <TableRatesManager />}
                 {adminTab === 'menu' && <MenuManager menu={menu} onChanged={refresh} />}
-                {adminTab === 'customers' && <CustomerHistory />}
                 {adminTab === 'reports' && <RevenueReport />}
               </div>
             </main>

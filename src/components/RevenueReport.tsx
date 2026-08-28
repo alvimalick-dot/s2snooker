@@ -133,7 +133,11 @@ export default function RevenueReport() {
     const paid = (l.settlements ?? []).reduce((s, st) => st.amount > 0 ? s + st.amount : s, 0);
     return sum + paid;
   }, 0) ?? 0;
-  const totalUnpaid = (report?.totals.totalRevenue ?? 0) - totalPaid;
+  const totalDiscounts = report?.logs.reduce((sum, l) => {
+    const disc = Math.abs((l.settlements ?? []).reduce((s: number, st: any) => st.amount < 0 ? s + st.amount : s, 0));
+    return sum + disc;
+  }, 0) ?? 0;
+  const totalUnpaid = (report?.totals.totalRevenue ?? 0) - totalPaid - totalDiscounts;
   const paidCount = report?.logs.filter((l) => getPaymentStatus(l.totalRevenue, l.settlements ?? []) === 'paid').length ?? 0;
   const unpaidCount = report?.logs.filter((l) => getPaymentStatus(l.totalRevenue, l.settlements ?? []) === 'unpaid').length ?? 0;
 
@@ -214,6 +218,12 @@ export default function RevenueReport() {
               </div>
               <div className="text-xs text-slate-400 mt-0.5">{paidCount} paid · {unpaidCount} unpaid</div>
             </div>
+            {totalDiscounts > 0 && (
+              <div className="bg-slate-800 rounded-xl px-4 py-3 border-2 border-surface-border">
+                <div className="text-slate-400 font-semibold">Discounts Given</div>
+                <div className="text-occupied font-bold text-lg tabular-nums">Rs {totalDiscounts.toLocaleString()}</div>
+              </div>
+            )}
           </div>
 
           {/* Session list */}
@@ -224,6 +234,7 @@ export default function RevenueReport() {
                 {report.logs.map((log, i) => {
                   const status = getPaymentStatus(log.totalRevenue, log.settlements ?? []);
                   const paid = (log.settlements ?? []).reduce((sum, s) => s.amount > 0 ? sum + s.amount : 0, 0);
+                  const discount = Math.abs((log.settlements ?? []).reduce((sum: number, s: any) => s.amount < 0 ? sum + s.amount : 0, 0));
 
                   return (
                     <button
@@ -256,6 +267,9 @@ export default function RevenueReport() {
                         <div className="font-mono text-lg font-extrabold text-ink tabular-nums">Rs {log.totalRevenue.toLocaleString()}</div>
                         {paid > 0 && paid < log.totalRevenue && (
                           <div className="text-xs text-available font-semibold">Paid Rs {paid.toLocaleString()}</div>
+                        )}
+                        {discount > 0 && (
+                          <div className="text-xs text-occupied font-semibold">-{discount > paid ? '' : ''}Rs {discount.toLocaleString()} discount</div>
                         )}
                       </div>
                     </button>
@@ -298,7 +312,8 @@ export default function RevenueReport() {
 function SessionDetailPopup({ log, onClose }: { log: LogType; onClose: () => void }) {
   const status = getPaymentStatus(log.totalRevenue, log.settlements ?? []);
   const totalPaid = (log.settlements ?? []).reduce((sum, s) => s.amount > 0 ? sum + s.amount : 0, 0);
-  const remaining = Math.max(0, log.totalRevenue - totalPaid);
+  const totalDiscount = Math.abs((log.settlements ?? []).reduce((sum: number, s: any) => s.amount < 0 ? sum + s.amount : 0, 0));
+  const remaining = Math.max(0, log.totalRevenue - totalPaid - totalDiscount);
   const acc = log.accumulatedCharges ?? [];
   const accTotal = acc.reduce((sum, c) => sum + c.gameTotal + c.foodTotal, 0);
 
@@ -435,11 +450,12 @@ function SessionDetailPopup({ log, onClose }: { log: LogType; onClose: () => voi
               <div key={j} className="flex items-center justify-between bg-slate-800/60 rounded-lg px-4 py-2.5 border border-surface-border">
                 <div className="flex items-center gap-2">
                   <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${
+                    st.type === 'discount' ? 'bg-occupied-bg text-occupied' :
                     st.type === 'cash' ? 'bg-available-bg text-available' :
                     st.type === 'card' ? 'bg-blue-950 text-blue-300' :
                     'bg-reserved-bg text-reserved'
                   }`}>
-                    {st.type === 'cash' ? '💵' : st.type === 'card' ? '💳' : '👤'}
+                    {st.type === 'discount' ? '🏷️' : st.type === 'cash' ? '💵' : st.type === 'card' ? '💳' : '👤'}
                   </span>
                   <div>
                     <div className="text-sm font-bold text-ink capitalize">{st.type}</div>
@@ -447,8 +463,10 @@ function SessionDetailPopup({ log, onClose }: { log: LogType; onClose: () => voi
                     {st.date && <div className="text-xs text-slate-400/70">{formatDate(st.date)} {formatTime(st.date)}</div>}
                   </div>
                 </div>
-                <span className="font-mono text-lg font-extrabold text-available tabular-nums">
-                  Rs {Math.abs(st.amount).toLocaleString()}
+                <span className={`font-mono text-lg font-extrabold tabular-nums ${
+                  st.amount < 0 ? 'text-occupied' : 'text-available'
+                }`}>
+                  {st.amount < 0 ? '-' : ''}Rs {Math.abs(st.amount).toLocaleString()}
                 </span>
               </div>
             ))}
@@ -457,6 +475,12 @@ function SessionDetailPopup({ log, onClose }: { log: LogType; onClose: () => voi
             <span className="text-slate-400 font-bold">Total paid</span>
             <span className="font-mono text-available font-extrabold">Rs {totalPaid.toLocaleString()}</span>
           </div>
+          {totalDiscount > 0 && (
+            <div className="flex justify-between text-sm mt-1 px-1">
+              <span className="text-occupied font-bold">Discounts</span>
+              <span className="font-mono text-occupied font-extrabold">-Rs {totalDiscount.toLocaleString()}</span>
+            </div>
+          )}
           {remaining > 0 && (
             <div className="flex justify-between text-sm mt-1 px-1">
               <span className="text-occupied font-bold">Remaining</span>

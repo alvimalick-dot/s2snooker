@@ -15,11 +15,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const body = await req.json();
 
     if (!body.pricingType) return fail('pricingType is required');
-    if (typeof body.hourlyRate !== 'number') return fail('hourlyRate is required');
+    if (typeof body.hourlyRate !== 'number' || body.hourlyRate <= 0) return fail('hourlyRate must be a positive number');
+    if (body.flatPrice != null && (typeof body.flatPrice !== 'number' || body.flatPrice < 0)) return fail('flatPrice must be a non-negative number');
+    if (body.overtimeRate != null && (typeof body.overtimeRate !== 'number' || body.overtimeRate < 0)) return fail('overtimeRate must be a non-negative number');
+    if (body.durationMinutes != null && (typeof body.durationMinutes !== 'number' || body.durationMinutes < 0)) return fail('durationMinutes must be a non-negative number');
 
     // Generate a stable customerId for this session and normalize the name
     const customerId = nanoid(8);
-    const rawName = (body.customerName ?? '').trim();
+    const rawName = (body.customerName ?? '').trim().slice(0, 100);
     const customerName = rawName || `Guest #${customerId}`;
 
     // Atomic claim: guards against two staff members tapping "Start Session"

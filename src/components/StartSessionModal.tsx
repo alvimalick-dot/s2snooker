@@ -55,12 +55,16 @@ export default function StartSessionModal({
 
   async function handleStart() {
     if (!gameType) { setError('Pick a game type.'); return; }
+    if (gameType.hasSubtypes && (!subtype || subtype.price <= 0)) { setError('Select a valid game option with a price.'); return; }
+    if (!gameType.hasSubtypes && gameType.flatPrice <= 0) { setError('This game type has no price configured. Update rates in Settings.'); return; }
+    if (customerName.trim().length > 100) { setError('Customer name cannot exceed 100 characters.'); return; }
     setBusy(true);
     setError(null);
     try {
       const price = subtype ? subtype.price : gameType.flatPrice;
       const perMin = subtype ? subtype.perMinuteRate : gameType.perMinuteRate;
       const mins = subtype ? subtype.gameMinutes : 60;
+      if (mins <= 0 || price <= 0) { setError('Invalid rate configuration. Check game minutes and price.'); setBusy(false); return; }
       const label = subtype ? `${gameType.name} - ${subtype.name}` : gameType.name;
 
       await api.post(`/api/tables/${table._id}/start`, {
@@ -185,11 +189,11 @@ export default function StartSessionModal({
       <div className="mt-4">
         <label className="block text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">
           Customer Name <span className="normal-case font-normal">(optional)</span>
-        </label>
-        <input
+        </label>          <input
           value={customerName}
-          onChange={(e) => setCustomerName(e.target.value)}
+          onChange={(e) => setCustomerName(e.target.value.slice(0, 100))}
           placeholder="Leave blank for Guest"
+          maxLength={100}
           className="w-full rounded-xl bg-slate-800 border-2 border-surface-border px-4 py-3 text-base font-semibold text-white focus:outline-none focus:border-brass transition-colors"
         />
       </div>

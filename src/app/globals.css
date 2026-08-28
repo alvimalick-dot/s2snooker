@@ -41,31 +41,14 @@ body {
   background: #64748b; /* slate-500 */
 }
 
-/* Touch-friendly buttons — minimum 48px tap targets */
+/* Touch-friendly buttons — prevent double-tap zoom */
 button, [role="button"] {
   touch-action: manipulation;
-  min-height: 44px;
 }
 
 /* Monospace for numbers */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
-}
-
-/* Mobile: prevent overscroll bounce on iOS */
-@media (max-width: 768px) {
-  html, body {
-    overscroll-behavior: none;
-    -webkit-overflow-scrolling: touch;
-  }
-}
-
-/* Ensure modals are properly centered on mobile */
-@media (max-width: 640px) {
-  .fixed.inset-0 {
-    align-items: flex-end;
-    padding-bottom: env(safe-area-inset-bottom, 0);
-  }
 }
 
 /* Safe area padding for notch devices */

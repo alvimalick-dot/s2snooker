@@ -38,7 +38,8 @@ export default function OrderModal({
     } finally { setBusyId(null); }
   }
 
-  const grouped = menu.reduce<Record<string, MenuItemDoc[]>>((acc, m) => {
+  const availableMenu = menu.filter((m) => m.inStock);
+  const grouped = availableMenu.reduce<Record<string, MenuItemDoc[]>>((acc, m) => {
     (acc[m.category] ??= []).push(m);
     return acc;
   }, {});
