@@ -185,8 +185,14 @@ export async function PATCH(req: NextRequest) {
       return fail('logId and a positive amount are required');
     }
 
+    // Validate payment doesn't exceed remaining balance
     const log = await RevenueLog.findById(logId);
     if (!log) return fail('Revenue log not found', 404);
+    const alreadyPaid = (log.settlements ?? []).reduce((sum: number, s: any) => s.amount > 0 ? sum + s.amount : 0, 0);
+    const remaining = Math.max(0, log.totalRevenue - alreadyPaid);
+    if (Number(amount) > remaining + 1) {
+      return fail(`Payment Rs ${amount} exceeds remaining balance of Rs ${remaining}`);
+    }
 
     const settlement = {
       type,

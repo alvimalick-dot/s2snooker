@@ -160,6 +160,7 @@ export async function GET(req: NextRequest) {
       const paymentStatus = computePaymentStatus(log.totalRevenue, log.settlements ?? []);
 
       const sessionEntry = {
+        _id: String(log._id),
         tableNumber: log.tableNumber,
         isPrivateRoom: log.isPrivateRoom,
         startTime: log.startTime,

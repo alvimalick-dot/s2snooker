@@ -14,12 +14,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await connectDB();
     const body = await req.json().catch(() => ({}));
 
-    const table = await Table.findById(params.id);
-    if (!table) return fail('Table not found', 404);
+    // Atomic read: only proceed if the table still has a session.
+    // Prevents race condition where New Game already consumed the session.
+    const table = await Table.findOne({ _id: params.id, status: 'occupied' });
+    if (!table) return fail('Table not found or already free', 404);
     if (!table.currentSession) return fail('No active session on this table', 409);
 
     const session = table.currentSession;
     const endTime = new Date();
+
+    // If session is still paused when ending, finalize the pause duration
+    // so the bill doesn't count the remaining pause time.
+    let finalPausedMs = session.pausedDurationMs ?? 0;
+    if (session.isPaused && session.pauseStartedAt) {
+      finalPausedMs += endTime.getTime() - new Date(session.pauseStartedAt).getTime();
+    }
 
     const bill = computeSessionBill(
       {
@@ -33,9 +42,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         flatSurcharge: session.flatSurcharge ?? undefined,
         minimumMinutes: session.minimumMinutes ?? undefined,
         activeOrders: session.activeOrders as any,
-        pausedDurationMs: session.pausedDurationMs ?? 0,
-        isPaused: session.isPaused ?? false,
-        pauseStartedAt: session.pauseStartedAt ?? null,
+        pausedDurationMs: finalPausedMs,
+        isPaused: false, // force not-paused so computeSessionBill doesn't double-count
+        pauseStartedAt: null,
       },
       endTime
     );
@@ -57,9 +66,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       shiftId: activeShift?._id ?? null,
     });
 
-    table.status = 'available';
-    table.currentSession = null as any;
-    await table.save();
+    // Atomic free: only free if still occupied with this session
+    await Table.findOneAndUpdate(
+      { _id: params.id, status: 'occupied' },
+      { $set: { status: 'available', currentSession: null } }
+    );
 
     return ok({ table, receipt: log, bill });
   } catch (err: any) {

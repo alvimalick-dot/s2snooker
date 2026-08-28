@@ -54,7 +54,7 @@ export function buildRevenueLogPayload(params: {
     isPaused?: boolean;
     pauseStartedAt?: Date | string | null;
     switchedFromTableNumber?: number | null;
-    accumulatedCharges?: { tableNumber: number; gameType: string; gameTotal: number; foodTotal: number; elapsedMinutes: number; startTime: Date | string; endTime: Date | string }[];
+    accumulatedCharges?: { tableNumber: number; gameType: string; gameTotal: number; foodTotal: number; elapsedMinutes: number; startTime: Date | string; endTime: Date | string; loser?: string; settled?: boolean; settledBy?: string }[];
   };
   closedBy: string;
   endTime?: Date;
@@ -72,7 +72,8 @@ export function buildRevenueLogPayload(params: {
   const logDate = businessDate(now);
 
   // Build itemized list with comp/discount info
-  const items = (params.session.activeOrders ?? []).map((o) => {
+  // Include items from accumulated rounds (previous games) + current round
+  const currentItems = (params.session.activeOrders ?? []).map((o) => {
     const lineGross = o.price * o.quantity;
     let lineTotal = lineGross;
     if (o.isComp) {
@@ -91,8 +92,24 @@ export function buildRevenueLogPayload(params: {
     };
   });
 
+  // Items from accumulated rounds (previous games in this session)
+  const accItems = (params.session.accumulatedCharges ?? []).flatMap((c: any) =>
+    (c.items ?? []).map((o: any) => ({
+      itemName: `[R${(params.session.accumulatedCharges ?? []).indexOf(c) + 1}] ${o.itemName}`,
+      quantity: o.quantity,
+      price: o.price,
+      isComp: o.isComp ?? false,
+      compReason: '',
+      discountPercent: o.discountPercent ?? 0,
+      lineTotal: money(o.price * o.quantity * (o.isComp ? 0 : (1 - (o.discountPercent ?? 0) / 100))),
+    }))
+  );
+
+  const items = [...accItems, ...currentItems];
+
   // Accumulated charges from previous games ("New Game" flow)
-  const prev = params.session.accumulatedCharges ?? [];
+  // Exclude settled rounds (already billed via "Bill Now") to avoid double-counting
+  const prev = (params.session.accumulatedCharges ?? []).filter((c: any) => !c.settled);
   const prevGameTotal = prev.reduce((sum, c) => sum + c.gameTotal, 0);
   const prevFoodTotal = prev.reduce((sum, c) => sum + c.foodTotal, 0);
 

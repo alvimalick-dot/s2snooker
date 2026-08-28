@@ -20,19 +20,24 @@ export default function EndSessionModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Customer name entry ──────────────────────────────────────
-  const [nameValue, setNameValue] = useState('');
+  const session = table.currentSession;
+
+  // Auto-fill from last round's loser (computed early for useState init)
+  const accumulated = (session as any)?.accumulatedCharges ?? [];
+  const lastLoser = accumulated.length > 0 ? accumulated[accumulated.length - 1].loser ?? '' : '';
+
+  // ── Customer name entry (auto-fill from last round's loser) ──
+  const [nameValue, setNameValue] = useState(lastLoser);
   const [suggestions, setSuggestions] = useState<CustomerAccountDoc[]>([]);
   const [highlightIdx, setHighlightIdx] = useState(-1);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const session = table.currentSession;
-  if (!session) return null;
-
+  // Bill computation (handle null session gracefully)
   const bill = useMemo(() => {
     void now;
+    if (!session) return { tableTotal: 0, foodTotal: 0, total: 0, elapsedMs: 0, overtimeMinutes: 0, foodSubtotal: 0, compTotal: 0, discountTotal: 0 };
     return computeSessionBill({
       startTime: session.startTime,
       billingMode: session.billingMode,
@@ -52,28 +57,6 @@ export default function EndSessionModal({
       pauseStartedAt: session.pauseStartedAt,
     });
   }, [session, now]);
-
-  // Accumulated charges from previous games
-  const accumulated = (session as any).accumulatedCharges ?? [];
-  const accGameTotal = accumulated.reduce((sum: number, c: any) => sum + c.gameTotal, 0);
-  const accFoodTotal = accumulated.reduce((sum: number, c: any) => sum + c.foodTotal, 0);
-  const accCount = accumulated.length;
-
-  // Current game food breakdown
-  const foodItems = (session.activeOrders ?? []).filter((o: any) => !o.isComp);
-  const compItems = (session.activeOrders ?? []).filter((o: any) => o.isComp);
-
-  // Grand total across all games
-  const grandTotal = bill.total + accGameTotal + accFoodTotal;
-
-  // Game label
-  const gameLabel = (session.gameType ?? session.pricingType ?? 'Game').replace(/_/g, ' ');
-
-  const hasOvertime = (bill.overtimeMinutes ?? 0) > 0;
-  const hasFood = bill.foodTotal > 0;
-  const hasComp = compItems.length > 0;
-  const hasAccumulated = accCount > 0;
-  const customerName = nameValue.trim();
 
   // ── Autocomplete logic ──────────────────────────────────────
   const fetchSuggestions = useCallback(async (q: string) => {
@@ -99,6 +82,26 @@ export default function EndSessionModal({
       setShowSuggestions(false);
     }
   }, []);
+
+  // ── ALL HOOKS ABOVE THIS LINE ───────────────────────────────
+  if (!session) return null;
+
+  // Session-dependent computed values (safe after early return)
+  const accCount = accumulated.length;
+  const unsettledRounds = accumulated.filter((c: any) => !c.settled);
+  const settledRounds = accumulated.filter((c: any) => c.settled);
+  const unsettledAccGameTotal = unsettledRounds.reduce((sum: number, c: any) => sum + c.gameTotal, 0);
+  const unsettledAccFoodTotal = unsettledRounds.reduce((sum: number, c: any) => sum + c.foodTotal, 0);
+  const settledTotal = settledRounds.reduce((sum: number, c: any) => sum + c.gameTotal + c.foodTotal, 0);
+  const foodItems = session.activeOrders.filter((o: any) => !o.isComp);
+  const compItems = session.activeOrders.filter((o: any) => o.isComp);
+  const grandTotal = bill.total + unsettledAccGameTotal + unsettledAccFoodTotal;
+  const gameLabel = (session.gameType ?? session.pricingType ?? 'Game').replace(/_/g, ' ');
+  const hasOvertime = (bill.overtimeMinutes ?? 0) > 0;
+  const hasFood = bill.foodTotal > 0;
+  const hasComp = compItems.length > 0;
+  const hasAccumulated = accCount > 0;
+  const customerName = nameValue.trim();
 
   function handleNameChange(val: string) {
     setNameValue(val);
@@ -180,24 +183,51 @@ export default function EndSessionModal({
       {/* ── Previous Games ────────────────────────────────────── */}
       {hasAccumulated && (
         <div className="mb-4">
-          <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2">Previous Games</div>
-          <div className="space-y-1.5">
-            {accumulated.map((c: any, i: number) => (
-              <div key={i} className="flex items-center justify-between bg-slate-800/60 rounded-xl px-4 py-2.5 border border-surface-border">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="w-6 h-6 rounded-full bg-surface-dark border border-surface-border flex items-center justify-center text-[10px] font-bold text-slate-400">
-                    {i + 1}
-                  </span>
-                  <span className="font-bold text-ink">{(c.gameType || 'Game').replace(/_/g, ' ')}</span>
-                  <span className="text-slate-400">T{c.tableNumber}</span>
-                  <span className="text-slate-400/70">{c.elapsedMinutes} min</span>
-                </div>
-                <span className="font-mono text-sm font-bold text-brass tabular-nums">
-                  Rs {(c.gameTotal + c.foodTotal).toLocaleString()}
-                </span>
+          {/* Settled rounds (already billed) */}
+          {settledRounds.length > 0 && (
+            <div className="mb-3">
+              <div className="text-[10px] text-available font-bold uppercase tracking-wider mb-1.5">✓ Already Billed ({settledRounds.length})</div>
+              <div className="space-y-1">
+                {settledRounds.map((c: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between bg-available-bg/30 rounded-lg px-3 py-2 border border-available/10 text-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-available font-bold">✓</span>
+                      <span className="text-ink">{(c.gameType || 'Game').replace(/_/g, ' ')}</span>
+                      <span className="text-slate-400">T{c.tableNumber}</span>
+                      {c.loser && <span className="text-slate-400/70">loser: {c.loser}</span>}
+                    </div>
+                    <span className="font-mono text-available font-bold tabular-nums">
+                      Rs {(c.gameTotal + c.foodTotal).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
+
+          {/* Unsettled rounds (on tab) */}
+          {unsettledRounds.length > 0 && (
+            <div>
+              <div className="text-[10px] text-brass font-bold uppercase tracking-wider mb-1.5">On Tab ({unsettledRounds.length})</div>
+              <div className="space-y-1.5">
+                {unsettledRounds.map((c: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between bg-slate-800/60 rounded-xl px-4 py-2.5 border border-surface-border">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="w-6 h-6 rounded-full bg-surface-dark border border-surface-border flex items-center justify-center text-[10px] font-bold text-slate-400">
+                        {i + 1}
+                      </span>
+                      <span className="font-bold text-ink">{(c.gameType || 'Game').replace(/_/g, ' ')}</span>
+                      <span className="text-slate-400">T{c.tableNumber}</span>
+                      {c.loser && <span className="text-slate-400/70">loser: {c.loser}</span>}
+                    </div>
+                    <span className="font-mono text-sm font-bold text-brass tabular-nums">
+                      Rs {(c.gameTotal + c.foodTotal).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -264,22 +294,27 @@ export default function EndSessionModal({
         <div className="flex items-center justify-between">
           <div>
             <span className="text-lg font-extrabold text-ink">Total</span>
-            {hasAccumulated && (
-              <span className="text-xs text-slate-400 font-semibold ml-2">
-                {accCount + 1} games
-              </span>
-            )}
+            <span className="text-xs text-slate-400 font-semibold ml-2">
+              {unsettledRounds.length + 1} unsettled
+              {settledRounds.length > 0 && <> · {settledRounds.length} already billed</>}
+            </span>
           </div>
           <span className={`font-mono text-4xl font-extrabold tabular-nums ${hasOvertime ? 'text-occupied' : 'text-brass'}`}>
             Rs {grandTotal.toLocaleString()}
           </span>
         </div>
+        {settledTotal > 0 && (
+          <div className="flex items-center justify-between text-xs text-slate-400 mt-1">
+            <span>Already billed to accounts</span>
+            <span className="font-mono text-available font-bold">Rs {settledTotal.toLocaleString()}</span>
+          </div>
+        )}
       </div>
 
       {/* ═══ CUSTOMER NAME (who pays) ═══════════════════════════ */}
       <div className="mb-2 relative">
         <label className="block text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">
-          Who is paying?
+          Who is paying?{lastLoser && <span className="text-brass normal-case ml-2">(auto-filled from last round's loser)</span>}
         </label>
         <input
           ref={inputRef}

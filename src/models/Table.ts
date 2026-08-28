@@ -60,6 +60,7 @@ const SessionSchema = new Schema(
     framesPlayed: { type: Number, default: 0 }, // frame counter for per-frame billing
     framePrice: { type: Number, default: 0 }, // price per frame (when billingMode === 'per_frame')
     customerName: { type: String, default: '' },
+    loser: { type: String, default: '' }, // who lost this round (for bet tracking)
     additionalPlayers: { type: [String], default: [] }, // other people at the table (for group history search)
     isPaused: { type: Boolean, default: false },
     pauseStartedAt: { type: Date, default: null },
@@ -87,6 +88,16 @@ const SessionSchema = new Schema(
         elapsedMinutes: { type: Number, default: 0 },
         startTime: { type: Date, required: true },
         endTime: { type: Date, required: true },
+        loser: { type: String, default: '' }, // who lost this round
+        settled: { type: Boolean, default: false }, // true if billed via 'Bill now'
+        settledBy: { type: String, default: '' }, // customerId of person billed
+        items: { type: [{
+          itemName: { type: String, required: true },
+          quantity: { type: Number, default: 1 },
+          price: { type: Number, required: true },
+          isComp: { type: Boolean, default: false },
+          discountPercent: { type: Number, default: 0 },
+        }], default: [] },
       }],
       default: [],
     },

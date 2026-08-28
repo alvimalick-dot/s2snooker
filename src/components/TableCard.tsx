@@ -77,7 +77,7 @@ export default function TableCard({
   const isPaused = table.currentSession?.isPaused;
 
   return (
-    <div className={`rounded-2xl border-2 overflow-hidden transition-all ${
+    <div className={`h-full flex flex-col rounded-2xl border-2 overflow-hidden transition-all ${
       isOccupied
         ? hasOvertime
           ? 'border-occupied shadow-glow-red'
@@ -108,7 +108,7 @@ export default function TableCard({
         </span>
       </div>
 
-      <div className={`px-5 py-4 flex flex-col gap-3 ${isOccupied ? 'bg-surface-card' : ''}`}>
+      <div className={`flex-1 min-h-0 overflow-hidden px-4 py-2.5 flex flex-col gap-2 ${isOccupied ? 'bg-surface-card' : ''}`}>
 
         {/* === OCCUPIED === */}
         {isOccupied && table.currentSession && bill && (
@@ -127,7 +127,7 @@ export default function TableCard({
 
             {/* Timer — big and bold */}
             <div className="text-center py-1">
-              <div className={`font-mono text-5xl font-extrabold tracking-wider tabular-nums ${
+              <div className={`font-mono [font-size:clamp(1.75rem,4vh,3rem)] font-extrabold tracking-wider tabular-nums ${
                 hasOvertime ? 'text-occupied' : isPaused ? 'text-reserved' : 'text-ink'
               }`}>
                 {formatElapsed(bill.elapsedMs)}
@@ -158,11 +158,11 @@ export default function TableCard({
                       <span className="text-[10px] text-brass font-bold ml-2">{acc.length + 1} games</span>
                     )}
                   </div>
-                  <span className={`font-mono text-3xl font-extrabold tabular-nums ${
-                    hasOvertime ? 'text-occupied' : 'text-ink'
-                  }`}>
-                    Rs {grandTotal.toLocaleString()}
-                  </span>
+              <span className={`font-mono [font-size:clamp(1.25rem,3vh,1.875rem)] font-extrabold tabular-nums ${
+                hasOvertime ? 'text-occupied' : 'text-ink'
+              }`}>
+                Rs {grandTotal.toLocaleString()}
+              </span>
                 </div>
               );
             })()}
@@ -233,16 +233,16 @@ export default function TableCard({
             <div className="flex gap-3">
               {!isPaused && !showPauseForm && (
                 <button disabled={busy} onClick={() => setShowPauseForm(true)}
-                  className="flex-1 py-4 rounded-xl bg-slate-800 border-2 border-surface-border text-base font-bold uppercase text-ink hover:bg-slate-700 active:scale-[0.97] transition-all">
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 border-2 border-surface-border text-sm font-bold uppercase text-ink hover:bg-slate-700 active:scale-[0.97] transition-all">
                   Pause
                 </button>
               )}
               <button disabled={busy} onClick={() => onOpenOrder(table)}
-                className="flex-1 py-4 rounded-xl bg-brass text-white text-base font-bold uppercase shadow-md hover:bg-brass-light active:scale-[0.97] transition-all">
+                className="flex-1 py-2.5 rounded-xl bg-brass text-white text-sm font-bold uppercase shadow-md hover:bg-brass-light active:scale-[0.97] transition-all">
                 + Order
               </button>
               <button disabled={busy} onClick={endSession}
-                className={`flex-1 py-4 rounded-xl text-white text-base font-bold uppercase shadow-md active:scale-[0.97] transition-all ${
+                className={`flex-1 py-2.5 rounded-xl text-white text-sm font-bold uppercase shadow-md active:scale-[0.97] transition-all ${
                   hasOvertime ? 'bg-occupied hover:bg-occupied/90 animate-pulse' : 'bg-occupied hover:bg-occupied/90'
                 }`}>
                 End

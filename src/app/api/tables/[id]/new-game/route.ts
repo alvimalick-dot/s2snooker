@@ -1,15 +1,22 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import Table from '@/models/Table';
+import RevenueLog from '@/models/RevenueLog';
+import CustomerAccount from '@/models/CustomerAccount';
 import { ok, fail, computeSessionBill } from '@/lib/utils';
 import { nanoid } from 'nanoid';
 
 export const dynamic = 'force-dynamic';
 
+/** Normalize a name for consistent grouping. */
+function normName(s: string): string {
+  return (s ?? '').trim().toLowerCase();
+}
+
 // POST /api/tables/:id/new-game — freeze current game, start fresh
 //
 // body: {
-//   targetTableId?: string,  — if different from current, move session there
+//   targetTableId?: string,
 //   gameType: string,
 //   pricingType: string,
 //   billingMode: string,
@@ -17,9 +24,8 @@ export const dynamic = 'force-dynamic';
 //   flatPrice: number,
 //   durationMinutes: number,
 //   overtimeRate: number,
-//   gracePeriodMinutes?: number,
-//   flatSurcharge?: number,
-//   minimumMinutes?: number,
+//   loser?: string,       — who lost this round
+//   billNow?: boolean,    — if true, charge the loser's account immediately
 // }
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -32,6 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const session = sourceTable.currentSession as any;
     const now = new Date();
+    const loser = (body.loser ?? '').trim();
 
     // ── 1. Compute the current game's bill ──────────────────────
     const bill = computeSessionBill(
@@ -55,8 +62,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     );
 
     const elapsedMinutes = Math.ceil(bill.elapsedMs / 60000);
+    const roundTotal = bill.total; // game + food for this round
 
-    // ── 2. Freeze into accumulatedCharges ───────────────────────
+    // ── 2. Determine if bill now or keep on tab ─────────────────
+    const billNow = body.billNow === true && loser;
+
+    // Build the accumulated charge entry
     const charge = {
       tableNumber: sourceTable.tableNumber,
       gameType: session.gameType ?? session.pricingType ?? '',
@@ -65,16 +76,59 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       elapsedMinutes,
       startTime: session.startTime,
       endTime: now,
+      loser,
+      settled: billNow,
+      settledBy: billNow ? loser : '',
+      items: (session.activeOrders ?? []).map((o: any) => ({
+        itemName: o.itemName,
+        quantity: o.quantity,
+        price: o.price,
+        isComp: o.isComp ?? false,
+        discountPercent: o.discountPercent ?? 0,
+      })),
     };
 
     const accumulatedCharges = [...(session.accumulatedCharges ?? []), charge];
 
-    // ── 3. Determine target table ───────────────────────────────
+    // ── 3. If billNow, charge the loser's CustomerAccount ───────
+    if (billNow && loser) {
+      // Look up by name only — the loser may be different from the session owner
+      const account = await CustomerAccount.findOneAndUpdate(
+        { customerName: normName(loser) },
+        {
+          $setOnInsert: {
+            customerId: session.customerId,
+            customerName: normName(loser),
+            balance: 0,
+            totalCharged: 0,
+            totalPaid: 0,
+            transactions: [],
+          },
+        },
+        { upsert: true, new: true }
+      );
+
+      // Add charge transaction
+      const transaction = {
+        type: 'charge',
+        amount: roundTotal,
+        description: `${session.gameType ?? 'Game'} — ${sourceTable.label ?? `T${sourceTable.tableNumber}`}`,
+        sessionId: null,
+        staffName: 'System',
+        date: now,
+      };
+
+      account.balance += roundTotal;
+      account.totalCharged += roundTotal;
+      account.transactions.push(transaction as any);
+      await account.save();
+    }
+
+    // ── 4. Determine target table ───────────────────────────────
     const moving = body.targetTableId && body.targetTableId !== params.id;
     let targetTable = sourceTable;
 
     if (moving) {
-      // Atomically claim the destination
       const claimed = await Table.findOneAndUpdate(
         { _id: body.targetTableId, status: { $ne: 'occupied' } },
         { $set: { status: 'occupied', reservation: null } },
@@ -86,21 +140,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         return fail('Destination table is already occupied', 409);
       }
       targetTable = claimed;
-
-      // Free the source table
       sourceTable.status = 'available';
       sourceTable.currentSession = null as any;
       await sourceTable.save();
     }
 
-    // ── 4. Start fresh game on target ───────────────────────────
+    // ── 5. Start fresh game on target ───────────────────────────
     targetTable.status = 'occupied';
     targetTable.currentSession = {
       customerId: session.customerId,
       customerName: session.customerName,
+      loser,
       additionalPlayers: session.additionalPlayers,
       accumulatedCharges,
-      // New game pricing
       gameType: body.gameType,
       pricingType: body.pricingType,
       billingMode: body.billingMode,
@@ -111,13 +163,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       gracePeriodMinutes: body.gracePeriodMinutes ?? 0,
       flatSurcharge: body.flatSurcharge ?? 0,
       minimumMinutes: body.minimumMinutes ?? null,
-      // Fresh state
       startTime: now,
       isPaused: false,
       pauseStartedAt: null,
       pausedDurationMs: 0,
       activeOrders: [],
-      // Carries forward for audit trail
       switchedFromTableNumber: moving ? sourceTable.tableNumber : (session.switchedFromTableNumber ?? null),
     } as any;
 
@@ -125,7 +175,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     return ok({
       previousBill: bill,
+      roundTotal,
       accumulatedCharges,
+      billNow,
+      billedTo: billNow ? loser : null,
       movedFrom: moving ? sourceTable.tableNumber : null,
       targetTable: {
         tableNumber: targetTable.tableNumber,

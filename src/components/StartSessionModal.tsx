@@ -39,6 +39,7 @@ export default function StartSessionModal({
   const [config, setConfig] = useState<ClubConfig | null>(null);
   const [selectedTypeIdx, setSelectedTypeIdx] = useState(0);
   const [selectedSubIdx, setSelectedSubIdx] = useState(0);
+  const [customerName, setCustomerName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,6 +74,7 @@ export default function StartSessionModal({
         gracePeriodMinutes: 0,
         flatSurcharge: 0,
         minimumMinutes: null,
+        customerName: customerName.trim() || undefined,
       });
       onStarted();
     } catch (e: any) {
@@ -178,6 +180,19 @@ export default function StartSessionModal({
           )}
         </div>
       )}
+
+      {/* ── Customer Name (optional) ─────────────────────────── */}
+      <div className="mt-4">
+        <label className="block text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">
+          Customer Name <span className="normal-case font-normal">(optional)</span>
+        </label>
+        <input
+          value={customerName}
+          onChange={(e) => setCustomerName(e.target.value)}
+          placeholder="Leave blank for Guest"
+          className="w-full rounded-xl bg-slate-800 border-2 border-surface-border px-4 py-3 text-base font-semibold text-white focus:outline-none focus:border-brass transition-colors"
+        />
+      </div>
 
       {error && (
         <div className="flex items-center gap-2 text-occupied bg-occupied-bg border-2 border-occupied/20 rounded-xl px-4 py-2.5 text-sm font-semibold mt-3">

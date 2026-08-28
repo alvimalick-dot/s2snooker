@@ -53,6 +53,7 @@ export interface TableSession {
   framesPlayed: number; // frame counter for per-frame billing
   framePrice: number; // price per frame
   customerName: string;
+  loser: string; // who lost this round
   additionalPlayers: string[];
   isPaused: boolean;
   pauseStartedAt: string | null;
@@ -69,6 +70,10 @@ export interface TableSession {
     elapsedMinutes: number;
     startTime: string;
     endTime: string;
+    loser: string;
+    settled: boolean;
+    settledBy: string;
+    items: { itemName: string; quantity: number; price: number; isComp?: boolean; discountPercent?: number }[];
   }[];
 }
 
@@ -148,6 +153,10 @@ export interface RevenueLogDoc {
     elapsedMinutes: number;
     startTime: string;
     endTime: string;
+    loser: string;
+    settled: boolean;
+    settledBy: string;
+    items: { itemName: string; quantity: number; price: number; isComp?: boolean; discountPercent?: number }[];
   }[];
 }
 

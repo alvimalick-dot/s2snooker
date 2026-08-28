@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { ReactNode } from 'react';
 import { MenuItemDoc, TableDoc, ShiftDoc, CustomerAccountDoc } from '@/lib/types';
 import { api } from '@/lib/api';
 import { todayPKT } from '@/lib/useClock';
@@ -19,6 +20,31 @@ import Sidebar, { AdminTab } from '@/components/Sidebar';
 
 const POLL_MS = 4000;
 const CLUB_NAME = process.env.NEXT_PUBLIC_CLUB_NAME || 'The Break Snooker Club';
+
+function FitGrid<T extends { _id: string }>({
+  tables,
+  cols,
+  children,
+}: {
+  tables: T[];
+  cols: number;
+  children: (t: T) => ReactNode;
+}) {
+  const rows = Math.max(1, Math.ceil(tables.length / cols));
+  return (
+    <div
+      className="flex-1 min-h-0 grid gap-4"
+      style={{
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+      }}
+    >
+      {tables.map((t) => (
+        <div key={t._id} className="min-h-0 overflow-hidden">{children(t)}</div>
+      ))}
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const [tab, setTab] = useState<'floor' | 'admin'>('floor');
@@ -113,7 +139,7 @@ export default function DashboardPage() {
   const privateTables = tables.filter((t) => t.isPrivateRoom);
 
   return (
-    <div className="h-screen flex flex-col bg-surface-dark">
+    <div className="h-dvh flex flex-col bg-surface-dark">
       <Header
         clubName={CLUB_NAME}
         tab={tab}
@@ -127,21 +153,23 @@ export default function DashboardPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* === FLOOR VIEW === */}
         {tab === 'floor' && (
-          <main className="flex-1 overflow-y-auto p-6 space-y-6">
+          <main className="flex-1 min-h-0 overflow-hidden p-6 flex flex-col gap-4">
             {loadError && (
-              <div className="bg-occupied/10 border border-occupied/30 rounded-xl p-4 text-sm text-occupied">
+              <div className="shrink-0 bg-occupied/10 border border-occupied/30 rounded-xl p-4 text-sm text-occupied">
                 {loadError}
               </div>
             )}
 
-            <StatsStrip tables={tables} todayRevenue={todayRevenue} customerAccounts={customerAccounts} />
+            <div className="shrink-0">
+              <StatsStrip tables={tables} todayRevenue={todayRevenue} customerAccounts={customerAccounts} />
+            </div>
 
             {tables.length > 0 ? (
-              <>
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Standard Tables</div>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {mainTables.map((t) => (
+              <div className="flex-1 min-h-0 flex gap-4 overflow-hidden">
+                <div className="flex-1 min-h-0 flex flex-col">
+                  <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Standard Tables</div>
+                  <FitGrid tables={mainTables} cols={4}>
+                    {(t) => (
                       <TableCard
                         key={t._id}
                         table={t}
@@ -152,15 +180,15 @@ export default function DashboardPage() {
                         onOpenEnd={setEndModalTable}
                         onOpenNewGame={setNewGameModalTable}
                       />
-                    ))}
-                  </div>
+                    )}
+                  </FitGrid>
                 </div>
 
                 {privateTables.length > 0 && (
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Private Room</div>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                      {privateTables.map((t) => (
+                  <div className="w-[22rem] shrink-0 min-h-0 flex flex-col">
+                    <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">Private Room</div>
+                    <FitGrid tables={privateTables} cols={1}>
+                      {(t) => (
                         <TableCard
                           key={t._id}
                           table={t}
@@ -171,11 +199,11 @@ export default function DashboardPage() {
                           onOpenEnd={setEndModalTable}
                           onOpenNewGame={setNewGameModalTable}
                         />
-                      ))}
-                    </div>
+                      )}
+                    </FitGrid>
                   </div>
                 )}
-              </>
+              </div>
             ) : !loading ? (
               <div className="text-center py-12 text-slate-400">
                 <div className="text-lg font-bold mb-2">No tables configured</div>
@@ -189,11 +217,13 @@ export default function DashboardPage() {
         {tab === 'admin' && (
           <>
             <Sidebar active={adminTab} onSelect={setAdminTab} />
-            <main className="flex-1 overflow-y-auto p-6">
-              {adminTab === 'rates' && <TableRatesManager />}
-              {adminTab === 'menu' && <MenuManager menu={menu} onChanged={refresh} />}
-              {adminTab === 'customers' && <CustomerHistory />}
-              {adminTab === 'reports' && <RevenueReport />}
+            <main className="flex-1 min-h-0 overflow-hidden p-6 flex flex-col">
+              <div className={`flex-1 min-h-0 ${adminTab === 'customers' ? 'overflow-y-auto' : 'overflow-y-auto rounded-2xl border-2 border-surface-border bg-surface-card/40'}`}>
+                {adminTab === 'rates' && <TableRatesManager />}
+                {adminTab === 'menu' && <MenuManager menu={menu} onChanged={refresh} />}
+                {adminTab === 'customers' && <CustomerHistory />}
+                {adminTab === 'reports' && <RevenueReport />}
+              </div>
             </main>
           </>
         )}
