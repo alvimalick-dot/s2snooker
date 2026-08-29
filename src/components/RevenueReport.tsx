@@ -83,7 +83,7 @@ export default function RevenueReport() {
 
     const doc = new jsPDF();
     doc.setFontSize(16);
-    doc.text('The Break Snooker Club — Revenue Report', 14, 16);
+    doc.text('Break & Game — Revenue Report', 14, 16);
     doc.setFontSize(10);
     doc.text(`Range: ${from} to ${to}`, 14, 23);
 

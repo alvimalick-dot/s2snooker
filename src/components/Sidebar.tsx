@@ -1,11 +1,12 @@
 'use client';
 
-export type AdminTab = 'rates' | 'menu' | 'reports';
+export type AdminTab = 'rates' | 'menu' | 'reports' | 'reset';
 
 const NAV_ITEMS: { key: AdminTab; label: string; icon: string }[] = [
   { key: 'rates', label: 'Game Rates', icon: '🏷️' },
   { key: 'menu', label: 'Menu Items', icon: '🍽️' },
   { key: 'reports', label: 'Reports', icon: '📊' },
+  { key: 'reset', label: 'Data Reset', icon: '🧹' },
 ];
 
 export default function Sidebar({

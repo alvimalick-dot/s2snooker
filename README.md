@@ -1,4 +1,4 @@
-# The Break Snooker Club — Table Management Dashboard
+# Break & Game — Table Management Dashboard
 
 Full-stack Next.js 14 (App Router) + MongoDB (Mongoose) dashboard for a snooker
 club: live table status, per-minute/flat-rate billing, a quick food-order

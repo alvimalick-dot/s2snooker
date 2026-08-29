@@ -48,7 +48,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               <circle cx="12" cy="12" r="5" fill="#16a34a" />
             </svg>
           </div>
-          <div className="text-2xl font-extrabold text-ink tracking-tight">The Break Snooker Club</div>
+          <div className="text-2xl font-extrabold text-ink tracking-tight">Break & Game</div>
           <div className="text-sm text-slate-400 font-semibold uppercase tracking-widest mt-1">Staff Login</div>
         </div>
 

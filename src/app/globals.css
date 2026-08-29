@@ -7,11 +7,15 @@
 }
 
 html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
   background: #0f172a; /* slate-900 */
   color: #f8fafc;      /* slate-50 */
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
 }
 
 /* Bigger default font for readability */

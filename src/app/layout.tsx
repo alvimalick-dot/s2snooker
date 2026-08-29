@@ -2,20 +2,18 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'The Break Snooker Club — Table Management',
+  title: 'Break & Game — Table Management',
   description: 'Live table status, menu, and revenue dashboard for a snooker club.',
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className="h-full">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -24,7 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="font-sans bg-surface text-ink antialiased">{children}</body>
+      <body className="h-full font-sans bg-surface text-ink antialiased">{children}</body>
     </html>
   );
 }

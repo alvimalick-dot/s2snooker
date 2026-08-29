@@ -16,11 +16,12 @@ import MenuManager from '@/components/MenuManager';
 import TableRatesManager from '@/components/TableRatesManager';
 import RevenueReport from '@/components/RevenueReport';
 import CustomerHistory from '@/components/CustomerHistory';
+import DataReset from '@/components/DataReset';
 import Sidebar, { AdminTab } from '@/components/Sidebar';
 import LoginScreen from '@/components/LoginScreen';
 
 const POLL_MS = 4000;
-const CLUB_NAME = process.env.NEXT_PUBLIC_CLUB_NAME || 'The Break Snooker Club';
+const CLUB_NAME = process.env.NEXT_PUBLIC_CLUB_NAME || 'Break & Game';
 
 function FitGrid<T extends { _id: string }>({
   tables,
@@ -289,6 +290,7 @@ export default function DashboardPage() {
                 {adminTab === 'rates' && <TableRatesManager />}
                 {adminTab === 'menu' && <MenuManager menu={menu} onChanged={refresh} />}
                 {adminTab === 'reports' && <RevenueReport />}
+                {adminTab === 'reset' && <DataReset />}
               </div>
             </main>
           </>

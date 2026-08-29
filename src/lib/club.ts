@@ -1,4 +1,4 @@
-// The 5 tables at The Break Snooker Club.
+// The 5 tables at Break & Game.
 // No table CRUD UI — these are the only tables, period.
 export const CLUB_TABLES = [
   { tableNumber: 1, label: 'Table 1', isPrivateRoom: false },
