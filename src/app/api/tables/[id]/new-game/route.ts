@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/mongodb';
 import Table from '@/models/Table';
 import RevenueLog from '@/models/RevenueLog';
 import CustomerAccount from '@/models/CustomerAccount';
+import Shift from '@/models/Shift';
 import { ok, fail, computeSessionBill } from '@/lib/utils';
 import { nanoid } from 'nanoid';
 
@@ -60,6 +61,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         gracePeriodMinutes: session.gracePeriodMinutes ?? undefined,
         flatSurcharge: session.flatSurcharge ?? undefined,
         minimumMinutes: session.minimumMinutes ?? undefined,
+        framesPlayed: session.framesPlayed,
+        framePrice: session.framePrice,
         activeOrders: session.activeOrders,
         pausedDurationMs: session.pausedDurationMs ?? 0,
         isPaused: session.isPaused ?? false,
@@ -134,6 +137,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // Financial Reports and daily reconciliation. Without this,
       // Bill-Now revenue is invisible to the reports API.
       const { businessDate } = await import('@/lib/billing');
+      const activeShift = await Shift.findOne({ status: 'active' });
       await RevenueLog.create({
         date: businessDate(now),
         tableNumber: sourceTable.tableNumber,
@@ -147,6 +151,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         startTime: session.startTime,
         endTime: now,
         closedBy: 'System (Bill Now)',
+        shiftId: activeShift?._id ?? null,
         items: (session.activeOrders ?? []).map((o: any) => ({
           itemName: o.itemName,
           quantity: o.quantity,

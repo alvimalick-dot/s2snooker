@@ -126,6 +126,8 @@ export async function GET(req: NextRequest) {
         gracePeriodMinutes: t.currentSession.gracePeriodMinutes,
         flatSurcharge: t.currentSession.flatSurcharge,
         minimumMinutes: t.currentSession.minimumMinutes,
+        framesPlayed: t.currentSession.framesPlayed,
+        framePrice: t.currentSession.framePrice,
         activeOrders: t.currentSession.activeOrders,
         pausedDurationMs: t.currentSession.pausedDurationMs,
         isPaused: t.currentSession.isPaused,
@@ -181,45 +183,76 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const { logId, type = 'cash', amount, staffName = '', description = '', discount } = body;
 
-    const discountAmount = Number(discount) || 0;
-    const paymentAmount = Number(amount) || 0;
+    const discountAmount = Math.max(0, Number(discount) || 0);
+    const paymentAmount = Math.max(0, Number(amount) || 0);
     const trimmedDesc = (description || '').trim().slice(0, 100);
 
-    // Discount-only call (no payment, just reduce the bill)
-    if (discountAmount > 0 && paymentAmount <= 0) {
-      if (!logId) return fail('logId is required');
-      if (discountAmount < 1) return fail('Discount must be at least Rs 1');
+    if (!logId) return fail('logId is required');
+    if (discountAmount === 0 && paymentAmount <= 0) {
+      return fail('A positive payment amount, a discount, or both are required');
+    }
 
-      const log = await RevenueLog.findById(logId);
-      if (!log) return fail('Revenue log not found', 404);
+    const log = await RevenueLog.findById(logId);
+    if (!log) return fail('Revenue log not found', 404);
 
-      // Check discount doesn't exceed what's owed
-      const alreadyPaid = (log.settlements ?? []).reduce((sum: number, s: any) => s.amount > 0 ? sum + s.amount : 0, 0);
-      const alreadyDiscounted = Math.abs((log.settlements ?? []).reduce((sum: number, s: any) => s.amount < 0 ? sum + s.amount : 0, 0));
-      const remaining = Math.max(0, log.totalRevenue - alreadyPaid - alreadyDiscounted);
-      if (discountAmount > remaining + 1) {
-        return fail(`Discount Rs ${discountAmount} exceeds remaining balance of Rs ${remaining}. Max discount: Rs ${Math.floor(remaining)}`);
-      }
+    // What the customer still owes = total − already paid − already discounted.
+    const alreadyPaid = (log.settlements ?? []).reduce((sum: number, s: any) => (s.amount > 0 ? sum + s.amount : sum), 0);
+    const alreadyDiscounted = Math.abs(
+      (log.settlements ?? []).reduce((sum: number, s: any) => (s.amount < 0 ? sum + s.amount : sum), 0)
+    );
+    const remaining = Math.max(0, log.totalRevenue - alreadyPaid - alreadyDiscounted);
 
-      const settlement = {
+    // Validate discount + payment together so "Pay All after applying a
+    // discount" can never be rejected because the server saw a stale balance.
+    if (discountAmount + paymentAmount > remaining + 1) {
+      return fail(
+        `Amount exceeds remaining balance of Rs ${Math.floor(remaining)}. Max discount + payment: Rs ${Math.floor(remaining)}`
+      );
+    }
+
+    const settlements: any[] = [];
+
+    // Discount first (a negative settlement), then the payment — both pushed
+    // before one save so a combined discount + payment request is atomic.
+    if (discountAmount > 0) {
+      settlements.push({
         type: 'discount',
         amount: -discountAmount,
         description: trimmedDesc || 'Discount applied',
         staffName: staffName || 'Staff',
         date: new Date(),
-      };
+      });
+    }
 
-      log.settlements.push(settlement as any);
-      await log.save();
+    if (paymentAmount > 0) {
+      settlements.push({
+        type,
+        amount: paymentAmount,
+        description: description || 'Marked as paid',
+        staffName,
+        date: new Date(),
+      });
+    }
 
-      // Also update CustomerAccount if exists
-      if (log.customerId || log.customerName) {
-        const nameRegex = log.customerName ? new RegExp(`^${log.customerName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') : null;
-        const account = log.customerId
-          ? await CustomerAccount.findOne({ customerId: log.customerId })
-          : nameRegex ? await CustomerAccount.findOne({ customerName: nameRegex }) : null;
-        if (account) {
-          account.balance = Math.max(0, account.balance - discountAmount);
+    log.settlements.push(...(settlements as any));
+    await log.save();
+
+    // Keep the CustomerAccount balance in sync: a discount reduces what the
+    // customer owes; a payment reduces the balance and counts as paid.
+    if (log.customerId || log.customerName) {
+      const nameRegex = log.customerName ? new RegExp(`^${log.customerName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') : null;
+      const account = log.customerId
+        ? await CustomerAccount.findOne({ customerId: log.customerId })
+        : nameRegex ? await CustomerAccount.findOne({ customerName: nameRegex }) : null;
+      if (account) {
+        const totalReduction = discountAmount + paymentAmount;
+        if (totalReduction > 0) {
+          account.balance = Math.max(0, account.balance - totalReduction);
+        }
+        if (paymentAmount > 0) {
+          account.totalPaid += paymentAmount;
+        }
+        if (discountAmount > 0) {
           account.transactions.push({
             type: 'discount',
             amount: -discountAmount,
@@ -228,65 +261,22 @@ export async function PATCH(req: NextRequest) {
             staffName: staffName || 'Staff',
             date: new Date(),
           } as any);
-          await account.save();
         }
-      }
-
-      return NextResponse.json({ success: true, data: { logId, settlement } });
-    }
-
-    if (!logId || paymentAmount <= 0) {
-      return fail('logId and a positive amount are required');
-    }
-    if (paymentAmount < 1) {
-      return fail('Payment must be at least Rs 1');
-    }
-
-    // Validate payment doesn't exceed remaining balance
-    // Must account for discounts (negative settlements) to avoid overpayment
-    const log = await RevenueLog.findById(logId);
-    if (!log) return fail('Revenue log not found', 404);
-    const alreadyPaid = (log.settlements ?? []).reduce((sum: number, s: any) => s.amount > 0 ? sum + s.amount : 0, 0);
-    const alreadyDiscounted = Math.abs((log.settlements ?? []).reduce((sum: number, s: any) => s.amount < 0 ? sum + s.amount : 0, 0));
-    const remaining = Math.max(0, log.totalRevenue - alreadyPaid - alreadyDiscounted);
-    if (paymentAmount > remaining + 1) {
-      return fail(`Payment Rs ${paymentAmount} exceeds remaining balance of Rs ${Math.floor(remaining)}`);
-    }
-
-    const settlement = {
-      type,
-      amount: paymentAmount,
-      description: description || `Marked as paid`,
-      staffName,
-      date: new Date(),
-    };
-
-    log.settlements.push(settlement as any);
-    await log.save();
-
-    // Bug fix: Also decrement the CustomerAccount balance so the
-    // "Outstanding" stat and BillPopup suggestions stay accurate.
-    if (log.customerId || log.customerName) {
-      const acctNameRegex = log.customerName ? new RegExp(`^${log.customerName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') : null;
-      const account = log.customerId
-        ? await CustomerAccount.findOne({ customerId: log.customerId })
-        : acctNameRegex ? await CustomerAccount.findOne({ customerName: acctNameRegex }) : null;
-      if (account) {
-        account.balance = Math.max(0, account.balance - paymentAmount);
-        account.totalPaid += paymentAmount;
-        account.transactions.push({
-          type: 'payment',
-          amount: -paymentAmount,
-          description: description || `Payment via ${type}`,
-          sessionId: log._id,
-          staffName: staffName || 'Staff',
-          date: new Date(),
-        } as any);
+        if (paymentAmount > 0) {
+          account.transactions.push({
+            type: 'payment',
+            amount: -paymentAmount,
+            description: description || `Payment via ${type}`,
+            sessionId: log._id,
+            staffName: staffName || 'Staff',
+            date: new Date(),
+          } as any);
+        }
         await account.save();
       }
     }
 
-    return NextResponse.json({ success: true, data: { logId, settlement } });
+    return NextResponse.json({ success: true, data: { logId, discount: discountAmount, payment: paymentAmount, settlements } });
   } catch (err: any) {
     return fail(err.message ?? 'Failed to record payment', 500);
   }

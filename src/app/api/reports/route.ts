@@ -74,6 +74,8 @@ export async function GET(req: NextRequest) {
           gracePeriodMinutes: t.currentSession.gracePeriodMinutes,
           flatSurcharge: t.currentSession.flatSurcharge,
           minimumMinutes: t.currentSession.minimumMinutes,
+          framesPlayed: t.currentSession.framesPlayed,
+          framePrice: t.currentSession.framePrice,
           activeOrders: t.currentSession.activeOrders,
           pausedDurationMs: t.currentSession.pausedDurationMs,
           isPaused: t.currentSession.isPaused,
@@ -101,27 +103,37 @@ export async function GET(req: NextRequest) {
         'Private Room',
         'Customer',
         'Pricing Type',
-        'Table Revenue',
-        'Menu Revenue',
-        'Total Revenue',
+        'Table Revenue (net)',
+        'Menu Revenue (net)',
+        'Discounts',
+        'Total Revenue (net)',
         'Start',
         'End',
       ].join(',');
 
-      const rows = logs.map((l) =>
-        [
+      const rows = logs.map((l) => {
+        const discounts = Math.abs(
+          (l.settlements ?? []).reduce((sum: number, s: any) => (s.amount < 0 ? sum + s.amount : sum), 0)
+        );
+        const grossRevenue = l.totalRevenue ?? 0;
+        const ratio = grossRevenue > 0 ? discounts / grossRevenue : 0;
+        const totalRevenueNet = Math.max(0, grossRevenue - discounts);
+        const tableRevenueNet = Math.round((l.tableRentalRevenue ?? 0) * (1 - ratio) * 100) / 100;
+        const menuRevenueNet = Math.round((l.menuSalesRevenue ?? 0) * (1 - ratio) * 100) / 100;
+        return [
           new Date(l.date).toISOString().slice(0, 10),
           l.tableNumber,
           l.isPrivateRoom ? 'Yes' : 'No',
           `"${(l.customerName ?? '').replace(/"/g, '""')}"`,
           l.pricingType,
-          l.tableRentalRevenue,
-          l.menuSalesRevenue,
-          l.totalRevenue,
+          tableRevenueNet,
+          menuRevenueNet,
+          discounts,
+          totalRevenueNet,
           l.startTime ? new Date(l.startTime).toISOString() : '',
           l.endTime ? new Date(l.endTime).toISOString() : '',
-        ].join(',')
-      );
+        ].join(',');
+      });
 
       const csv = [header, ...rows].join('\n');
 

@@ -26,7 +26,14 @@ function computePaymentStatus(
     if (s.amount > 0) return sum + s.amount;
     return sum;
   }, 0);
-  if (paidAmount >= totalRevenue && totalRevenue > 0) return 'paid';
+  // Discounts (negative settlements) reduce what's owed, so a bill that was
+  // discounted then fully paid should read PAID, not PARTIAL.
+  const discountedAmount = Math.abs(settlements.reduce((sum, s) => {
+    if (s.amount < 0) return sum + s.amount;
+    return sum;
+  }, 0));
+  const owed = Math.max(0, totalRevenue - discountedAmount);
+  if (paidAmount >= owed && owed > 0) return 'paid';
   if (paidAmount > 0) return 'partial';
   return 'unpaid';
 }
@@ -82,6 +89,8 @@ export async function GET(req: NextRequest) {
         gracePeriodMinutes: session.gracePeriodMinutes,
         flatSurcharge: session.flatSurcharge,
         minimumMinutes: session.minimumMinutes,
+        framesPlayed: session.framesPlayed,
+        framePrice: session.framePrice,
         activeOrders: session.activeOrders,
         pausedDurationMs: session.pausedDurationMs,
         isPaused: session.isPaused,

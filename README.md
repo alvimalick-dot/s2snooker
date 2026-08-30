@@ -113,10 +113,13 @@ few things needed adjusting to actually work in production:
 
 ## Extending
 
-- **Auth**: there's no login yet — `ADMIN_PASSWORD` in `.env.example` is a
-  placeholder. For a real deployment, gate the "Pricing, Reports & Settings"
-  tab behind NextAuth or a simple cookie-based password check in
-  `middleware.ts`.
+- **Auth**: there's a real login now — credentials are validated **server-side**
+  (`ADMIN_ID` / `ADMIN_PASSWORD` in `.env.local`, defaults `admin` / `break123`)
+  and the browser only receives an HttpOnly, HMAC-signed, 12-hour session cookie
+  (`SESSION_SECRET` in `.env.local`). The API middleware (`src/middleware.ts`)
+  rejects every non-auth route without a valid cookie, so Data Reset / Reports /
+  shifts / payments can't be triggered by a random Wi-Fi user. For stronger
+  security use per-staff accounts and rotate `SESSION_SECRET`.
 - **Reservations**: `PATCH /api/tables/:id` accepts `{ reservation: {...} }`
   or `{ reservation: null }` to set/clear the yellow "Reserved" state shown
   in the mockup — there's no dedicated reservation UI yet, wire a small form

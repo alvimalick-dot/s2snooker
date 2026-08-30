@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { RevenueLogDoc } from '@/lib/types';
 import { api } from '@/lib/api';
+import { itemNetLine } from '@/lib/billing';
 import { todayPKT } from '@/lib/useClock';
 import ModalShell from './ModalShell';
 
@@ -45,7 +46,9 @@ function formatElapsed(start?: string, end?: string) {
 
 function getPaymentStatus(totalRevenue: number, settlements: any[]) {
   const paid = (settlements ?? []).reduce((sum, s) => s.amount > 0 ? sum + s.amount : 0, 0);
-  if (paid >= totalRevenue && totalRevenue > 0) return 'paid';
+  const discounted = Math.abs((settlements ?? []).reduce((sum: number, s: any) => s.amount < 0 ? sum + s.amount : 0, 0));
+  const owed = Math.max(0, (totalRevenue ?? 0) - discounted);
+  if (paid >= owed && owed > 0) return 'paid';
   if (paid > 0) return 'partial';
   return 'unpaid';
 }
@@ -89,7 +92,7 @@ export default function RevenueReport() {
 
     autoTable(doc, {
       startY: 28,
-      head: [['Date', 'Table', 'Customer', 'Pricing', 'Games', 'Table Rs', 'Menu Rs', 'Total Rs', 'Paid', 'Status']],
+      head: [['Date', 'Table', 'Customer', 'Pricing', 'Games', 'Table Rs', 'Menu Rs', 'Discount Rs', 'Total Rs (net)', 'Paid', 'Status']],
       body: report.logs.map((l) => {
         const acc = (l as any).accumulatedCharges ?? [];
         const accLabel = acc.length > 0
@@ -97,24 +100,29 @@ export default function RevenueReport() {
           : '—';
         const paid = (l.settlements ?? []).reduce((s: number, st: any) => st.amount > 0 ? s + st.amount : 0, 0);
         const discounts = Math.abs((l.settlements ?? []).reduce((s: number, st: any) => st.amount < 0 ? s + st.amount : 0, 0));
-        const netRevenue = Math.max(0, l.totalRevenue - discounts);
+        const netRevenue = Math.max(0, (l.totalRevenue ?? 0) - discounts);
+        const ratio = (l.totalRevenue ?? 0) > 0 ? discounts / (l.totalRevenue ?? 0) : 0;
+        const tableNet = Math.round((l.tableRentalRevenue ?? 0) * (1 - ratio) * 100) / 100;
+        const menuNet = Math.round((l.menuSalesRevenue ?? 0) * (1 - ratio) * 100) / 100;
         return [
           new Date(l.date).toLocaleDateString(),
           l.isPrivateRoom ? `Room ${l.tableNumber}` : `Table ${l.tableNumber}`,
           l.customerName || '—',
           l.pricingType,
           accLabel,
-          l.tableRentalRevenue.toLocaleString(),
-          l.menuSalesRevenue.toLocaleString(),
+          tableNet.toLocaleString(),
+          menuNet.toLocaleString(),
+          discounts > 0 ? discounts.toLocaleString() : '—',
           netRevenue.toLocaleString(),
           paid > 0 ? `Rs ${paid.toLocaleString()}` : '—',
-          getPaymentStatus(netRevenue, l.settlements ?? []),
+          getPaymentStatus(l.totalRevenue, l.settlements ?? []),
         ];
       }),
       foot: [[
         '', '', '', '', '',
         report.totals.tableRentalRevenue.toLocaleString(),
         report.totals.menuSalesRevenue.toLocaleString(),
+        totalDiscounts > 0 ? totalDiscounts.toLocaleString() : '',
         report.totals.totalRevenue.toLocaleString(),
         totalPaid > 0 ? `Rs ${totalPaid.toLocaleString()}` : '',
         '',
@@ -139,7 +147,13 @@ export default function RevenueReport() {
     const disc = Math.abs((l.settlements ?? []).reduce((s: number, st: any) => st.amount < 0 ? s + st.amount : s, 0));
     return sum + disc;
   }, 0) ?? 0;
-  const totalUnpaid = (report?.totals.totalRevenue ?? 0) - totalPaid - totalDiscounts;
+  const totalUnpaid = report?.logs.reduce((sum, l) => {
+    const sts = (l.settlements ?? []) as any[];
+    const paid = sts.reduce((s: number, st: any) => st.amount > 0 ? s + st.amount : s, 0);
+    const discounted = Math.abs(sts.reduce((s: number, st: any) => st.amount < 0 ? s + st.amount : s, 0));
+    const owed = Math.max(0, (l.totalRevenue ?? 0) - discounted);
+    return sum + Math.max(0, owed - paid);
+  }, 0) ?? 0;
   const paidCount = report?.logs.filter((l) => {
     const disc = Math.abs((l.settlements ?? []).reduce((s: number, st: any) => st.amount < 0 ? s + st.amount : s, 0));
     return getPaymentStatus(Math.max(0, l.totalRevenue - disc), l.settlements ?? []) === 'paid';
@@ -443,8 +457,12 @@ function SessionDetailPopup({ log, onClose }: { log: LogType; onClose: () => voi
           <div className="bg-slate-800/60 rounded-xl border border-surface-border divide-y divide-surface-border">
             {log.items.map((it: any, j: number) => (
               <div key={j} className="flex items-center justify-between px-4 py-2.5">
-                <span className="text-sm text-ink font-semibold">{it.quantity}× {it.itemName}</span>
-                <span className="font-mono text-sm text-brass font-bold">Rs {((it.price ?? 0) * (it.quantity ?? 1)).toLocaleString()}</span>
+                <span className="text-sm text-ink font-semibold">
+                  {it.quantity}× {it.itemName}
+                  {it.isComp && <span className="text-available ml-1 text-xs">(comp)</span>}
+                  {!it.isComp && (it.discountPercent ?? 0) > 0 && <span className="text-occupied ml-1 text-xs">(-{it.discountPercent}%)</span>}
+                </span>
+                <span className="font-mono text-sm text-brass font-bold">Rs {itemNetLine(it).toLocaleString()}</span>
               </div>
             ))}
           </div>

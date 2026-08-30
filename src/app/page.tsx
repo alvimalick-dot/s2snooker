@@ -121,11 +121,20 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // Check auth on mount
+  // Check auth on mount — ask the server whether the session cookie is valid
   useEffect(() => {
-    const authed = localStorage.getItem('snooker-auth') === '1';
-    setAuthenticated(authed);
-    setAuthChecked(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get<{ authenticated: boolean }>('/api/auth/status');
+        if (!cancelled) setAuthenticated(!!res.authenticated);
+      } catch {
+        if (!cancelled) setAuthenticated(false);
+      } finally {
+        if (!cancelled) setAuthChecked(true);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Load data only when authenticated
@@ -146,8 +155,8 @@ export default function DashboardPage() {
     window.localStorage.setItem('snooker-staff-name', name);
   }
 
-  function handleLogout() {
-    localStorage.removeItem('snooker-auth');
+  async function handleLogout() {
+    try { await api.post('/api/auth/logout'); } catch { /* session already gone */ }
     setAuthenticated(false);
   }
 

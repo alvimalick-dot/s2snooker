@@ -4,7 +4,7 @@ const TransactionSchema = new Schema(
   {
     type: {
       type: String,
-      enum: ['charge', 'payment', 'adjustment'],
+      enum: ['charge', 'payment', 'adjustment', 'discount'],
       required: true,
     },
     amount: { type: Number, required: true }, // positive for charges, negative for payments

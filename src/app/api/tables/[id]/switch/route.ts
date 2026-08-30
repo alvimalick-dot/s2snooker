@@ -68,6 +68,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         gracePeriodMinutes: session.gracePeriodMinutes ?? undefined,
         flatSurcharge: session.flatSurcharge ?? undefined,
         minimumMinutes: session.minimumMinutes ?? undefined,
+        framesPlayed: session.framesPlayed,
+        framePrice: session.framePrice,
         activeOrders: session.activeOrders as any,
         pausedDurationMs: session.pausedDurationMs ?? 0,
         isPaused: session.isPaused ?? false,

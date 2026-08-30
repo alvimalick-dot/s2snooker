@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-
-const LOGIN_ID = process.env.NEXT_PUBLIC_LOGIN_ID || 'admin';
-const PASSWORD = process.env.NEXT_PUBLIC_LOGIN_PASSWORD || 'break123';
+import { api } from '@/lib/api';
 
 interface LoginScreenProps {
   onLogin: () => void;
@@ -20,21 +18,20 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     inputRef.current?.focus();
   }, []);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setBusy(true);
 
-    // Small delay to simulate network check (prevents timing attacks)
-    setTimeout(() => {
-      if (loginId.trim() === LOGIN_ID && password === PASSWORD) {
-        localStorage.setItem('snooker-auth', '1');
-        onLogin();
-      } else {
-        setError('Invalid login ID or password');
-        setBusy(false);
-      }
-    }, 300);
+    try {
+      // Credentials are validated server-side; the browser only gets an
+      // HttpOnly session cookie back. Nothing sensitive lives in this bundle.
+      await api.post('/api/auth/login', { loginId: loginId.trim(), password });
+      onLogin();
+    } catch (err: any) {
+      setError(err.message ?? 'Invalid login ID or password');
+      setBusy(false);
+    }
   }
 
   return (

@@ -26,6 +26,15 @@ function formatElapsed(ms: number) {
 
 import { todayPKT } from '@/lib/useClock';
 
+// Net price for a logged/ordered line item after comps and percentage discounts.
+function itemNetLine(it: { price?: number; quantity?: number; isComp?: boolean; discountPercent?: number; lineTotal?: number }): number {
+  if (it.lineTotal != null) return it.lineTotal;
+  const gross = (it.price ?? 0) * (it.quantity ?? 1);
+  if (it.isComp) return 0;
+  const disc = it.discountPercent ?? 0;
+  return disc > 0 ? Math.round(gross * (1 - disc / 100) * 100) / 100 : gross;
+}
+
 function todayStr() {
   return todayPKT();
 }
@@ -405,37 +414,50 @@ function BillPopup({ customer, onClose, onPaid }: {
     const paid = (s.settlements ?? []).reduce((ps: number, st: any) => st.amount > 0 ? ps + st.amount : ps, 0);
     return sum + paid;
   }, 0);
-  const sessionRemaining = Math.max(0, totalAll - totalPaid);
-  const rawRemaining = hasBalanceOnly ? accountBalance : sessionRemaining;
-  // Calculate already-applied discounts from existing settlements
+  // Discounts (negative settlements) reduce what's owed, so subtract them from
+  // the outstanding figure — otherwise a discounted+paid bill shows "partial".
   const existingDiscount = sessions.reduce((sum, s) => {
     return sum + Math.abs((s.settlements ?? []).reduce((d: number, st: any) => st.amount < 0 ? d + st.amount : d, 0));
   }, 0);
-  const maxDiscount = Math.max(0, rawRemaining - existingDiscount);
+  const sessionRemaining = Math.max(0, totalAll - totalPaid - existingDiscount);
+  const rawRemaining = hasBalanceOnly ? accountBalance : sessionRemaining;
+  const maxDiscount = Math.max(0, rawRemaining);
 
   const rawDiscount = Math.max(0, Number(discount) || 0);
   const isDiscountOverMax = rawDiscount > maxDiscount && maxDiscount > 0;
   const discountAmount = Math.min(rawDiscount, maxDiscount);
-  const totalRemaining = Math.max(0, rawRemaining - existingDiscount - discountAmount);
+  const totalRemaining = Math.max(0, rawRemaining - discountAmount);
   const isFullyPaid = !hasBalanceOnly && sessionRemaining === 0 && totalAll > 0;
 
+  // What a single session still needs: total − paid − already discounted.
   function sessionRem(s: any) {
-    const settled = (s.settlements ?? []).reduce((sum: number, st: any) => sum + st.amount, 0);
-    return Math.max(0, s.totalRevenue - settled);
+    const paid = (s.settlements ?? []).reduce((sum: number, st: any) => st.amount > 0 ? sum + st.amount : sum, 0);
+    const discounted = Math.abs((s.settlements ?? []).reduce((sum: number, st: any) => st.amount < 0 ? sum + st.amount : sum, 0));
+    return Math.max(0, s.totalRevenue - paid - discounted);
   }
 
-  // Pay a single session
+  // Pay a single session (discount share + payment travel in ONE atomic request)
   async function handlePaySession(s: any) {
     if (!s._id) return;
     const rem = sessionRem(s);
     if (rem <= 0) return;
-    if (!confirm(`Pay Rs ${rem.toLocaleString()} for this session?`)) return;
+    const share = discountAmount > 0
+      ? Math.min(rem, Math.round(discountAmount * (rem / Math.max(1, rawRemaining))) || 0)
+      : 0;
+    const amount = rem - share;
+    if (amount <= 0) {
+      alert('The current discount fully covers this session. Use “Pay All” for the remaining sessions.');
+      return;
+    }
+    if (!confirm(`Pay Rs ${amount.toLocaleString()} for this session?${share > 0 ? ` (Rs ${share.toLocaleString()} discount applied)` : ''}`)) return;
     setPayBusy(s._id);
     try {
       await api.patch('/api/customers/history', {
         logId: s._id,
         type: payMethod,
-        amount: rem,
+        amount,
+        discount: share,
+        description: share > 0 ? (discountReason || 'Discount applied') : '',
       });
       onPaid();
     } catch (e: any) {
@@ -445,53 +467,15 @@ function BillPopup({ customer, onClose, onPaid }: {
     }
   }
 
-  // Apply discount to unpaid sessions (proportional split)
-  async function applyDiscount(): Promise<boolean> {
-    if (discountAmount <= 0) return true;
-    const unpaid = sessions.filter((s) => sessionRem(s) > 0 && s._id);
-    if (unpaid.length === 0) return true;
-
-    let remaining = discountAmount;
-    for (const s of unpaid) {
-      if (remaining <= 0) break;
-      const sRem = sessionRem(s);
-      // Proportional share of discount for this session
-      const share = Math.min(remaining, Math.round(discountAmount * (sRem / sessionRemaining)) || remaining);
-      const amount = Math.min(share, sRem);
-      if (amount <= 0) continue;
-      await api.patch('/api/customers/history', {
-        logId: s._id,
-        type: 'discount',
-        amount: 0,
-        discount: amount,
-        description: discountReason || 'Discount applied',
-      });
-      remaining -= amount;
-    }
-    // Any rounding remainder goes to first session
-    if (remaining > 0 && unpaid.length > 0 && unpaid[0]._id) {
-      await api.patch('/api/customers/history', {
-        logId: unpaid[0]._id,
-        type: 'discount',
-        amount: 0,
-        discount: remaining,
-        description: discountReason || 'Discount applied',
-      });
-    }
-    return true;
-  }
-
-  // Pay all remaining sessions at once
+  // Pay all remaining sessions at once. The discount and the payment for each
+  // session are sent in the SAME request, so the server never acts on a stale
+  // balance and the customer is never charged the pre-discount total.
   async function handlePayAll() {
     if (rawRemaining <= 0 || isDiscountOverMax) return;
     setPayBusy('all');
     try {
-      // Apply discount first if any
-      if (discountAmount > 0) {
-        await applyDiscount();
-      }
-
-      // Pay account balance first (from Bill Now charges)
+      // Balance-only customer (Bill Now owed, no sessions today): the discount
+      // simply reduces the amount they pay off their account.
       if (hasBalanceOnly && accountBalance > 0) {
         const payAmount = discountAmount > 0 ? Math.max(0, accountBalance - discountAmount) : accountBalance;
         if (payAmount > 0) {
@@ -503,41 +487,42 @@ function BillPopup({ customer, onClose, onPaid }: {
           });
         }
       } else if (sessionRemaining > 0) {
-        // Recalculate remaining after discount applied
         const unpaid = sessions.filter((s) => sessionRem(s) > 0 && s._id);
-        if (discountAmount > 0) {
-          // Re-fetch to get updated remaining amounts after discount
-          const results = await Promise.allSettled(
-            unpaid.map(async (s) => {
-              const rem = sessionRem(s);
-              if (rem <= 0) return;
-              // Discount already applied, just pay what's left
-              await api.patch('/api/customers/history', {
-                logId: s._id,
-                type: payMethod,
-                amount: rem,
-              });
-            })
-          );
-          const failures = results.filter((r) => r.status === 'rejected');
-          if (failures.length > 0) {
-            alert(`${failures.length} payment(s) failed. ${unpaid.length - failures.length} succeeded.`);
-          }
-        } else {
-          // No discount — pay all unpaid sessions
-          const results = await Promise.allSettled(
-            unpaid.map(async (s) => {
-              await api.patch('/api/customers/history', {
-                logId: s._id,
-                type: payMethod,
-                amount: sessionRem(s),
-              });
-            })
-          );
-          const failures = results.filter((r) => r.status === 'rejected');
-          if (failures.length > 0) {
-            alert(`${failures.length} payment(s) failed. ${unpaid.length - failures.length} succeeded.`);
-          }
+        const owedTotal = unpaid.reduce((sum, s) => sum + sessionRem(s), 0);
+        if (owedTotal <= 0) return;
+
+        // Proportional split of the discount across sessions, then pay the net.
+        let discountLeft = discountAmount;
+        const requests = unpaid.map((s) => {
+          const sRem = sessionRem(s);
+          const rawShare = discountAmount > 0 ? Math.round(discountAmount * (sRem / owedTotal)) : 0;
+          const share = Math.min(Math.max(0, rawShare), sRem, discountLeft);
+          discountLeft = Math.max(0, discountLeft - share);
+          return { logId: s._id, discount: share, amount: sRem - share };
+        });
+        // Rounding remainder goes to the last session (still capped by what it owes).
+        if (discountLeft > 0 && requests.length > 0) {
+          const last = requests[requests.length - 1];
+          const extra = Math.min(discountLeft, last.amount);
+          last.discount += extra;
+          last.amount -= extra;
+        }
+
+        const results = await Promise.allSettled(
+          requests.map(async (r) => {
+            if (r.discount <= 0 && r.amount <= 0) return;
+            await api.patch('/api/customers/history', {
+              logId: r.logId,
+              type: payMethod,
+              amount: r.amount,
+              discount: r.discount,
+              description: r.discount > 0 ? (discountReason || 'Discount applied') : '',
+            });
+          })
+        );
+        const failures = results.filter((r) => r.status === 'rejected');
+        if (failures.length > 0) {
+          alert(`${failures.length} charge(s) failed. ${requests.length - failures.length} succeeded.`);
         }
       }
       onPaid();
@@ -649,8 +634,12 @@ function BillPopup({ customer, onClose, onPaid }: {
                   <div className="pl-3 border-l-2 border-surface-border mt-1 space-y-0.5">
                     {s.items.map((it: any, j: number) => (
                       <div key={j} className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400">{it.quantity}× {it.itemName}</span>
-                        <span className="font-mono text-slate-400">Rs {((it.price ?? 0) * (it.quantity ?? 1)).toLocaleString()}</span>
+                        <span className="text-slate-400">
+                          {it.quantity}× {it.itemName}
+                          {it.isComp && <span className="text-available ml-1">(comp)</span>}
+                          {!it.isComp && (it.discountPercent ?? 0) > 0 && <span className="text-occupied ml-1">(-{it.discountPercent}%)</span>}
+                        </span>
+                        <span className="font-mono text-slate-400">Rs {itemNetLine(it).toLocaleString()}</span>
                       </div>
                     ))}
                   </div>

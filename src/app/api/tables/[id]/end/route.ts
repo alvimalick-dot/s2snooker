@@ -42,6 +42,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         gracePeriodMinutes: session.gracePeriodMinutes ?? undefined,
         flatSurcharge: session.flatSurcharge ?? undefined,
         minimumMinutes: session.minimumMinutes ?? undefined,
+        framesPlayed: session.framesPlayed,
+        framePrice: session.framePrice,
         activeOrders: session.activeOrders as any,
         pausedDurationMs: finalPausedMs,
         isPaused: false, // force not-paused so computeSessionBill doesn't double-count

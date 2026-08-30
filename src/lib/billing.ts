@@ -2,6 +2,25 @@ export function money(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/**
+ * Net price for a logged/ordered line item after comps and percentage
+ * discounts. Used by the receipt and report detail views so the amount shown
+ * next to an item matches what was actually charged.
+ */
+export function itemNetLine(it: {
+  price?: number;
+  quantity?: number;
+  isComp?: boolean;
+  discountPercent?: number;
+  lineTotal?: number;
+}): number {
+  if (it.lineTotal != null) return it.lineTotal;
+  const gross = (it.price ?? 0) * (it.quantity ?? 1);
+  if (it.isComp) return 0;
+  const disc = it.discountPercent ?? 0;
+  return disc > 0 ? money(gross * (1 - disc / 100)) : gross;
+}
+
 // The club runs on Pakistan Standard Time (UTC+5, no DST) regardless of where
 // the server itself happens to be deployed (e.g. a host like Vercel that runs
 // its functions in UTC). If we naively used `new Date().getFullYear()/etc.`
