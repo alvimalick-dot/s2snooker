@@ -4,7 +4,7 @@ import Table from '@/models/Table';
 import RevenueLog from '@/models/RevenueLog';
 import CustomerAccount from '@/models/CustomerAccount';
 import { ok, fail } from '@/lib/utils';
-import { computeSessionBill } from '@/lib/billing';
+import { computeSessionBill, money } from '@/lib/billing';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,6 +97,14 @@ export async function GET(req: NextRequest) {
         pauseStartedAt: session.pauseStartedAt,
       });
 
+      // The live bill must include rounds kept on tab ("Keep on Tab"), but not
+      // rounds already billed via "Bill Now" (settled = true) — those are their
+      // own closed RevenueLogs / account charges already.
+      const unsettledAcc = (session.accumulatedCharges ?? []).filter((c: any) => !c.settled);
+      const accGameTotal = unsettledAcc.reduce((sum: number, c: any) => sum + c.gameTotal, 0);
+      const accFoodTotal = unsettledAcc.reduce((sum: number, c: any) => sum + c.foodTotal, 0);
+      const sessionTotal = money(bill.total + accGameTotal + accFoodTotal);
+
       // Group by customerId (or normalized name for legacy records)
       const key = cid;
       if (seen.has(key)) {
@@ -108,7 +116,7 @@ export async function GET(req: NextRequest) {
             isPrivateRoom: t.isPrivateRoom,
             startTime: session.startTime,
             elapsedMs: bill.elapsedMs,
-            currentBill: bill.total,
+            currentBill: sessionTotal,
             gameType: session.gameType ?? session.pricingType,
             hourlyRate: session.hourlyRate,
             flatPrice: session.flatPrice,
@@ -117,7 +125,7 @@ export async function GET(req: NextRequest) {
             billingMode: session.billingMode,
             activeOrders: session.activeOrders,
           });
-          existing.totalBill += bill.total;
+          existing.totalBill += sessionTotal;
         }
       } else {
         seen.add(key);
@@ -136,7 +144,7 @@ export async function GET(req: NextRequest) {
             isPrivateRoom: t.isPrivateRoom,
             startTime: session.startTime,
             elapsedMs: bill.elapsedMs,
-            currentBill: bill.total,
+            currentBill: sessionTotal,
             gameType: session.gameType ?? session.pricingType,
             hourlyRate: session.hourlyRate,
             flatPrice: session.flatPrice,
@@ -145,7 +153,7 @@ export async function GET(req: NextRequest) {
             billingMode: session.billingMode,
             activeOrders: session.activeOrders,
           }],
-          totalBill: bill.total,
+          totalBill: sessionTotal,
           accountBalance: (account as any)?.balance ?? 0,
           totalPaid: (account as any)?.totalPaid ?? 0,
         });

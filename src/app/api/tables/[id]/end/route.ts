@@ -7,15 +7,17 @@ import { ok, fail, computeSessionBill, buildRevenueLogPayload } from '@/lib/util
 
 export const dynamic = 'force-dynamic';
 
-// POST /api/tables/:id/end - closes the session, writes a RevenueLog entry, frees the table
+// POST /api/tables/:id/end — closes the session for THIS table only.
 // body: { closedBy?, customerName? }
+//
+// Each table ends independently. The chainId is used only for grouping
+// bills under one customer in the history view — NOT for linked ending.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     await connectDB();
     const body = await req.json().catch(() => ({}));
 
     // Atomic read: only proceed if the table still has a session.
-    // Prevents race condition where New Game already consumed the session.
     const table = await Table.findOne({ _id: params.id, status: 'occupied' });
     if (!table) return fail('Table not found or already free', 404);
     if (!table.currentSession) return fail('No active session on this table', 409);
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       shiftId: activeShift?._id ?? null,
     });
 
-    // Atomic free: only free if still occupied with this session
+    // Atomic free: only free this one table
     await Table.findOneAndUpdate(
       { _id: params.id, status: 'occupied' },
       { $set: { status: 'available', currentSession: null } }

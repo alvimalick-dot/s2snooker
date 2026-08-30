@@ -75,6 +75,9 @@ export interface TableSession {
     settledBy: string;
     items: { itemName: string; quantity: number; price: number; isComp?: boolean; discountPercent?: number }[];
   }[];
+  // Chain tracking for Keep on Tab
+  chainId?: string | null;
+  sourceTableId?: string | null;
 }
 
 export interface Reservation {

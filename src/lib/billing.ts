@@ -111,18 +111,24 @@ export function buildRevenueLogPayload(params: {
     };
   });
 
-  // Items from accumulated rounds (previous games in this session)
-  const accItems = (params.session.accumulatedCharges ?? []).flatMap((c: any) =>
-    (c.items ?? []).map((o: any) => ({
-      itemName: `[R${(params.session.accumulatedCharges ?? []).indexOf(c) + 1}] ${o.itemName}`,
-      quantity: o.quantity,
-      price: o.price,
-      isComp: o.isComp ?? false,
-      compReason: '',
-      discountPercent: o.discountPercent ?? 0,
-      lineTotal: money(o.price * o.quantity * (o.isComp ? 0 : (1 - (o.discountPercent ?? 0) / 100))),
-    }))
-  );
+  // Items from accumulated rounds (previous games in this session).
+  // Exclude settled rounds — they were itemized on their own "Bill Now" log,
+  // so including them here would make the final receipt's line items not add
+  // up to its total (which only counts unsettled rounds).
+  const accItems = (params.session.accumulatedCharges ?? [])
+    .flatMap((c: any, cIdx: number) =>
+      c.settled
+        ? []
+        : (c.items ?? []).map((o: any) => ({
+            itemName: `[R${cIdx + 1}] ${o.itemName}`,
+            quantity: o.quantity,
+            price: o.price,
+            isComp: o.isComp ?? false,
+            compReason: '',
+            discountPercent: o.discountPercent ?? 0,
+            lineTotal: money(o.price * o.quantity * (o.isComp ? 0 : (1 - (o.discountPercent ?? 0) / 100))),
+          }))
+    );
 
   const items = [...accItems, ...currentItems];
 

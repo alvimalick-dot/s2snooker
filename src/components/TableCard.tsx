@@ -140,12 +140,16 @@ export default function TableCard({
               )}
             </div>
 
-            {/* Bill — big number (includes accumulated from previous games) */}
+            {/* Bill — big number (includes unsettled previous games on tab) */}
             {(() => {
               const acc = (table.currentSession as any).accumulatedCharges ?? [];
-              const accTotal = acc.reduce((sum: number, c: any) => sum + c.gameTotal + c.foodTotal, 0);
+              // Only rounds still on the tab count toward what's owed now.
+              // Settled "Bill Now" rounds are already billed to an account,
+              // so including them here would show the customer owing twice.
+              const unsettled = acc.filter((c: any) => !c.settled);
+              const accTotal = unsettled.reduce((sum: number, c: any) => sum + c.gameTotal + c.foodTotal, 0);
               const grandTotal = bill.total + accTotal;
-              const hasGames = acc.length > 0;
+              const hasGames = unsettled.length > 0;
               return (
                 <div className={`flex items-baseline justify-between rounded-xl px-4 py-3 border-2 ${
                   hasOvertime
@@ -155,7 +159,7 @@ export default function TableCard({
                   <div>
                     <span className="text-sm text-slate-400 font-bold uppercase">Bill</span>
                     {hasGames && (
-                      <span className="text-[10px] text-brass font-bold ml-2">{acc.length + 1} games</span>
+                      <span className="text-[10px] text-brass font-bold ml-2">{unsettled.length + 1} games</span>
                     )}
                   </div>
               <span className={`font-mono [font-size:clamp(1.25rem,3vh,1.875rem)] font-extrabold tabular-nums ${
@@ -179,6 +183,17 @@ export default function TableCard({
                 {(table.currentSession.gameType ?? table.currentSession.pricingType ?? 'game').replace(/_/g, ' ')}
               </span>
             </div>
+
+            {/* Chain indicator */}
+            {table.currentSession.chainId && (
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-brass bg-brass-bg/50 rounded-lg px-3 py-1.5 border border-brass/15">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+                  <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+                </svg>
+                Linked session
+              </div>
+            )}
 
             {/* Pause display */}
             {isPaused && (

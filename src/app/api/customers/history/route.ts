@@ -133,6 +133,11 @@ export async function GET(req: NextRequest) {
         isPaused: t.currentSession.isPaused,
         pauseStartedAt: t.currentSession.pauseStartedAt,
       });
+      // Fold in rounds kept on tab (unsettled accumulated charges) so the
+      // active-session total matches the floor card / end-session bill.
+      const unsettledAcc = (t.currentSession.accumulatedCharges ?? []).filter((c: any) => !c.settled);
+      const accGameTotal = unsettledAcc.reduce((sum: number, c: any) => sum + c.gameTotal, 0);
+      const accFoodTotal = unsettledAcc.reduce((sum: number, c: any) => sum + c.foodTotal, 0);
       return {
         tableNumber: t.tableNumber,
         isPrivateRoom: t.isPrivateRoom,
@@ -144,9 +149,9 @@ export async function GET(req: NextRequest) {
           quantity: o.quantity,
           price: o.price,
         })),
-        tableRentalRevenue: bill.tableTotal,
-        menuSalesRevenue: bill.foodTotal,
-        totalRevenue: bill.total,
+        tableRentalRevenue: bill.tableTotal + accGameTotal,
+        menuSalesRevenue: bill.foodTotal + accFoodTotal,
+        totalRevenue: bill.total + accGameTotal + accFoodTotal,
         status: 'in_progress' as const,
       };
     });

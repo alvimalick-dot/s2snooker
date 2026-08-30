@@ -81,8 +81,11 @@ export async function GET(req: NextRequest) {
           isPaused: t.currentSession.isPaused,
           pauseStartedAt: t.currentSession.pauseStartedAt,
         });
-        // Include accumulated charges from previous games in this session
-        const acc = t.currentSession.accumulatedCharges ?? [];
+        // Include accumulated charges from previous games in this session.
+        // Only COUNT unsettled rounds — rounds already billed via "Bill Now"
+        // are closed RevenueLogs on their own, so folding them in here too
+        // would double-count them in the day's revenue.
+        const acc = (t.currentSession.accumulatedCharges ?? []).filter((c: any) => !c.settled);
         const accGameTotal = acc.reduce((sum: number, c: any) => sum + c.gameTotal, 0);
         const accFoodTotal = acc.reduce((sum: number, c: any) => sum + c.foodTotal, 0);
         liveOpenRevenue.tableRentalRevenue += bill.tableTotal + accGameTotal;

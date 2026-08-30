@@ -408,7 +408,6 @@ function BillPopup({ customer, onClose, onPaid }: {
 
   const sessions = customer.sessions ?? [];
   const accountBalance = customer.accountBalance ?? 0;
-  const hasBalanceOnly = sessions.length === 0 && accountBalance > 0;
   const totalAll = sessions.reduce((sum, s) => sum + s.totalRevenue, 0);
   const totalPaid = sessions.reduce((sum, s) => {
     const paid = (s.settlements ?? []).reduce((ps: number, st: any) => st.amount > 0 ? ps + st.amount : ps, 0);
@@ -420,14 +419,18 @@ function BillPopup({ customer, onClose, onPaid }: {
     return sum + Math.abs((s.settlements ?? []).reduce((d: number, st: any) => st.amount < 0 ? d + st.amount : d, 0));
   }, 0);
   const sessionRemaining = Math.max(0, totalAll - totalPaid - existingDiscount);
-  const rawRemaining = hasBalanceOnly ? accountBalance : sessionRemaining;
+  // A customer can owe BOTH today's session bills AND a Bill-Now account
+  // balance (e.g. they billed a round to their tab earlier, then kept
+  // playing). Both are money the club is owed, so the discount/remaining
+  // math and Pay All must cover both.
+  const rawRemaining = sessionRemaining + accountBalance;
   const maxDiscount = Math.max(0, rawRemaining);
 
   const rawDiscount = Math.max(0, Number(discount) || 0);
   const isDiscountOverMax = rawDiscount > maxDiscount && maxDiscount > 0;
   const discountAmount = Math.min(rawDiscount, maxDiscount);
   const totalRemaining = Math.max(0, rawRemaining - discountAmount);
-  const isFullyPaid = !hasBalanceOnly && sessionRemaining === 0 && totalAll > 0;
+  const isFullyPaid = sessionRemaining <= 0 && accountBalance <= 0 && totalAll > 0;
 
   // What a single session still needs: total − paid − already discounted.
   function sessionRem(s: any) {
@@ -474,28 +477,39 @@ function BillPopup({ customer, onClose, onPaid }: {
     if (rawRemaining <= 0 || isDiscountOverMax) return;
     setPayBusy('all');
     try {
-      // Balance-only customer (Bill Now owed, no sessions today): the discount
-      // simply reduces the amount they pay off their account.
-      if (hasBalanceOnly && accountBalance > 0) {
-        const payAmount = discountAmount > 0 ? Math.max(0, accountBalance - discountAmount) : accountBalance;
-        if (payAmount > 0) {
+      // The discount is split proportionally between the Bill-Now account
+      // balance and the session bills, based on each part's share of what's
+      // owed — so a customer with BOTH gets the discount fairly.
+      let discountLeft = discountAmount;
+
+      // 1) Pay down the Bill-Now account balance first (if any).
+      let accountPay = 0;
+      if (accountBalance > 0) {
+        const accountShare = discountAmount > 0
+          ? Math.min(accountBalance, discountLeft, Math.round(discountAmount * (accountBalance / Math.max(1, rawRemaining))))
+          : 0;
+        discountLeft = Math.max(0, discountLeft - accountShare);
+        accountPay = Math.max(0, accountBalance - accountShare);
+        if (accountPay > 0) {
           await api.patch('/api/customers/account', {
             customerId: customer.customerId,
             customerName: customer.customerName,
-            amount: payAmount,
+            amount: accountPay,
             type: payMethod,
           });
         }
-      } else if (sessionRemaining > 0) {
-        const unpaid = sessions.filter((s) => sessionRem(s) > 0 && s._id);
+      }
+
+      // 2) Pay each unpaid session bill, splitting the remaining discount
+      //    proportionally and sending discount + payment atomically.
+      const unpaid = sessions.filter((s) => sessionRem(s) > 0 && s._id);
+      if (unpaid.length > 0) {
         const owedTotal = unpaid.reduce((sum, s) => sum + sessionRem(s), 0);
         if (owedTotal <= 0) return;
 
-        // Proportional split of the discount across sessions, then pay the net.
-        let discountLeft = discountAmount;
         const requests = unpaid.map((s) => {
           const sRem = sessionRem(s);
-          const rawShare = discountAmount > 0 ? Math.round(discountAmount * (sRem / owedTotal)) : 0;
+          const rawShare = discountLeft > 0 ? Math.round(discountLeft * (sRem / Math.max(1, owedTotal))) : 0;
           const share = Math.min(Math.max(0, rawShare), sRem, discountLeft);
           discountLeft = Math.max(0, discountLeft - share);
           return { logId: s._id, discount: share, amount: sRem - share };
@@ -563,8 +577,9 @@ function BillPopup({ customer, onClose, onPaid }: {
       footer={footer}
       width="max-w-lg"
     >
-      {/* ── Balance-only customer (from Bill Now, no sessions today) */}
-      {hasBalanceOnly && (
+      {/* ── Outstanding account balance (from Bill Now), shown whether or not the
+            customer also has session bills today — both are owed */}
+      {accountBalance > 0 && (
         <div className="mb-4 bg-occupied-bg/30 rounded-xl border-2 border-occupied/20 p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -704,6 +719,12 @@ function BillPopup({ customer, onClose, onPaid }: {
             Rs {totalAll.toLocaleString()}
           </span>
         </div>
+        {accountBalance > 0 && (
+          <div className="flex items-center justify-between text-sm mt-1">
+            <span className="text-slate-400 font-semibold">Outstanding (Bill Now)</span>
+            <span className="font-mono text-occupied font-bold">Rs {accountBalance.toLocaleString()}</span>
+          </div>
+        )}
         {totalPaid > 0 && (
           <div className="flex items-center justify-between text-sm mt-1">
             <span className="text-slate-400 font-semibold">Already paid</span>

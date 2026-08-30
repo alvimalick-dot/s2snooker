@@ -29,6 +29,8 @@ interface ClubConfig {
   roomGameTypes: GameType[];
 }
 
+type ActionMode = 'end' | 'keep';
+
 export default function NewGameModal({
   table,
   allTables,
@@ -48,8 +50,11 @@ export default function NewGameModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ── Loser name entry ────────────────────────────────────────
-  const [loserName, setLoserName] = useState('');
+  // ── Radio mode ───────────────────────────────────────────────
+  const [mode, setMode] = useState<ActionMode>('keep');
+
+  // ── Loser / payer name (only for End Session) ────────────────
+  const [payerName, setPayerName] = useState('');
   const [suggestions, setSuggestions] = useState<CustomerAccountDoc[]>([]);
   const [highlightIdx, setHighlightIdx] = useState(-1);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -103,8 +108,8 @@ export default function NewGameModal({
   const ifEndNow = (currentBill?.total ?? 0) + unsettledTotal;
 
   const currentGameLabel = (session?.gameType ?? session?.pricingType ?? '').replace(/_/g, ' ');
-  const moving = targetTableId !== table._id;
-  const loser = loserName.trim();
+  const moving = mode === 'keep' && targetTableId !== table._id;
+  const payer = payerName.trim();
 
   // ── Autocomplete logic ──────────────────────────────────────
   const fetchSuggestions = useCallback(async (q: string) => {
@@ -132,14 +137,14 @@ export default function NewGameModal({
   }, []);
 
   function handleNameChange(val: string) {
-    setLoserName(val);
+    setPayerName(val);
     setHighlightIdx(-1);
     if (suggestTimer.current) clearTimeout(suggestTimer.current);
     suggestTimer.current = setTimeout(() => fetchSuggestions(val), 200);
   }
 
   function selectSuggestion(name: string) {
-    setLoserName(name);
+    setPayerName(name);
     setShowSuggestions(false);
     setHighlightIdx(-1);
   }
@@ -160,12 +165,11 @@ export default function NewGameModal({
     }
   }
 
-  async function handleAction(billNow: boolean) {
+  // ── Keep on Tab: start new game on target table ──────────────
+  async function handleKeepOnTab() {
     if (!gameType) { setError('Pick a game type.'); return; }
     if (gameType.hasSubtypes && (!subtype || subtype.price <= 0)) { setError('Select a valid game option.'); return; }
     if (!gameType.hasSubtypes && gameType.flatPrice <= 0) { setError('Game type has no price configured.'); return; }
-    if (billNow && !loser) { setError('Enter the loser\'s name to bill them.'); return; }
-    if (loser.length > 100) { setError('Loser name cannot exceed 100 characters.'); return; }
     setBusy(true);
     setError(null);
     try {
@@ -174,10 +178,7 @@ export default function NewGameModal({
       const mins = subtype ? subtype.gameMinutes : 60;
       const label = subtype ? `${gameType.name} - ${subtype.name}` : gameType.name;
 
-      // For Keep on Tab: use session customer name if no loser entered
-      const effectiveLoser = billNow ? loser : (loser || session?.customerName || '');
-
-      await api.post(`/api/tables/${table._id}/new-game`, {
+      await api.post(`/api/tables/${table._id}/keep-on-tab`, {
         targetTableId,
         gameType: label,
         pricingType: label.toLowerCase().replace(/\s+/g, '_'),
@@ -189,8 +190,6 @@ export default function NewGameModal({
         gracePeriodMinutes: 0,
         flatSurcharge: 0,
         minimumMinutes: null,
-        loser: effectiveLoser,
-        billNow,
       });
       onDone();
     } catch (e: any) {
@@ -200,17 +199,15 @@ export default function NewGameModal({
     }
   }
 
-  // End current session and start fresh (for different player pairs)
-  async function handleNewSession() {
-    if (loser.length > 100) { setError('Loser name cannot exceed 100 characters.'); return; }
+  // ── End Session: end this table (and any chain tables) ──────
+  async function handleEndSession() {
     setBusy(true);
     setError(null);
     try {
-      // End current session — use loser name if provided, otherwise session customer name
-      const payerName = loser || session?.customerName || '';
+      const payer = payerName.trim() || session?.customerName || '';
       await api.post(`/api/tables/${table._id}/end`, {
         closedBy: 'Staff',
-        customerName: payerName,
+        customerName: payer,
       });
       onDone();
     } catch (e: any) {
@@ -228,41 +225,72 @@ export default function NewGameModal({
       >
         Cancel
       </button>
-      {/* End Session — ends everything, payer must be named */}
-      <button
-        disabled={busy}
-        onClick={handleNewSession}
-        className="px-5 py-3 rounded-xl text-base font-bold bg-occupied text-white shadow-md hover:bg-occupied/90 active:scale-[0.98] transition-all disabled:opacity-50"
-      >
-        {busy ? '…' : `End Session`}
-      </button>
-      {/* Bill Now — requires loser name */}
-      <button
-        disabled={busy || !config || !loser}
-        onClick={() => handleAction(true)}
-        className="px-5 py-3 rounded-xl text-base font-bold bg-available text-white shadow-md hover:bg-available/90 active:scale-[0.98] transition-all disabled:opacity-50"
-      >
-        {busy ? 'Processing…' : `💰 Bill ${loser || '…'} — Rs ${(currentBill?.total ?? 0).toLocaleString()}`}
-      </button>
-      {/* Keep on Tab — no loser name needed */}
-      <button
-        disabled={busy || !config}
-        onClick={() => handleAction(false)}
-        className="px-5 py-3 rounded-xl text-base font-bold bg-brass text-white shadow-md hover:bg-brass-light active:scale-[0.98] transition-all disabled:opacity-50"
-      >
-        {busy ? '…' : 'Keep on Tab'}
-      </button>
+      {mode === 'end' ? (
+        <button
+          disabled={busy}
+          onClick={handleEndSession}
+          className="px-5 py-3 rounded-xl text-base font-bold bg-occupied text-white shadow-md hover:bg-occupied/90 active:scale-[0.98] transition-all disabled:opacity-50"
+        >
+          {busy ? '…' : 'End Session'}
+        </button>
+      ) : (
+        <button
+          disabled={busy || !config}
+          onClick={handleKeepOnTab}
+          className="px-5 py-3 rounded-xl text-base font-bold bg-brass text-white shadow-md hover:bg-brass-light active:scale-[0.98] transition-all disabled:opacity-50"
+        >
+          {busy ? '…' : 'Keep on Tab'}
+        </button>
+      )}
     </div>
   );
 
   return (
     <ModalShell
-      title="New Game"
-      subtitle={`${table.label ?? `Table ${table.tableNumber}`} — freeze current game, start fresh`}
+      title="Table Action"
+      subtitle={`${table.label ?? `Table ${table.tableNumber}`} — ${mode === 'end' ? 'end all games' : 'keep current game running, start new one'}`}
       onClose={onClose}
       busy={busy}
       footer={footer}
     >
+      {/* ── Radio: End Session / Keep on Tab ────────────────────── */}
+      <div className="mb-5">
+        <div className="flex gap-3">
+          <button
+            onClick={() => setMode('end')}
+            className={`flex-1 flex items-center justify-center gap-2.5 rounded-xl border-2 px-4 py-4 text-base font-bold transition-all ${
+              mode === 'end'
+                ? 'border-occupied bg-occupied-bg text-occupied shadow-sm'
+                : 'border-surface-border bg-slate-800 text-ink hover:border-slate-500'
+            }`}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M9 9l6 6M15 9l-6 6"/>
+            </svg>
+            End Session
+          </button>
+          <button
+            onClick={() => setMode('keep')}
+            className={`flex-1 flex items-center justify-center gap-2.5 rounded-xl border-2 px-4 py-4 text-base font-bold transition-all ${
+              mode === 'keep'
+                ? 'border-brass bg-brass-bg text-brass shadow-sm'
+                : 'border-surface-border bg-slate-800 text-ink hover:border-slate-500'
+            }`}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            Keep on Tab
+          </button>
+        </div>
+        <div className="mt-2 text-xs text-slate-400 font-semibold text-center">
+          {mode === 'end'
+            ? 'Stops all timers and presents the final bill for payment'
+            : 'Current game keeps running — start a new game on this or another table'}
+        </div>
+      </div>
+
       {/* ── Pause Warning ──────────────────────────────────────── */}
       {isPaused && (
         <div className="mb-4 flex items-center gap-2 bg-reserved-bg border-2 border-reserved/30 rounded-xl px-4 py-3">
@@ -274,7 +302,9 @@ export default function NewGameModal({
       {/* ── Current Game Summary ──────────────────────────────── */}
       <div className="mb-4 rounded-xl border-2 border-occupied/20 bg-occupied-bg/30 overflow-hidden">
         <div className="px-4 py-2.5 bg-occupied/5 border-b border-occupied/10">
-          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Current Game — Ending</div>
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+            {mode === 'end' ? 'Current Game — Ending' : 'Current Game — Running'}
+          </div>
         </div>
         <div className="px-4 py-3">
           <div className="flex items-center justify-between mb-1">
@@ -330,7 +360,7 @@ export default function NewGameModal({
       {/* ── Running Total ─────────────────────────────────────── */}
       <div className="mb-4 rounded-xl border-2 border-brass/30 bg-brass-bg px-4 py-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-bold text-ink">Unsettled total (if ended now)</span>
+          <span className="text-sm font-bold text-ink">Total if ended now</span>
           <span className="font-mono text-xl font-extrabold text-brass tabular-nums">
             Rs {ifEndNow.toLocaleString()}
           </span>
@@ -342,73 +372,75 @@ export default function NewGameModal({
         )}
       </div>
 
-      {/* ── Loser Name ────────────────────────────────────────── */}
-      <div className="mb-4 relative">
-        <label className="block text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">
-          Who lost this round?
-          <span className="text-slate-500 normal-case font-normal ml-2">optional for Keep on Tab</span>
-        </label>
-        <input
-          ref={inputRef}
-          value={loserName}
-          onChange={(e) => handleNameChange(e.target.value)}
-          onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-          onBlur={() => { setTimeout(() => setShowSuggestions(false), 150); }}
-          onKeyDown={handleNameKeyDown}
-          placeholder={session?.customerName ? `Leave blank to use ${session.customerName}` : "Enter loser's name (optional)"}
-          maxLength={100}
-          autoFocus
-          className="w-full rounded-xl bg-slate-800 border-2 border-surface-border px-4 py-3 text-base font-semibold text-white focus:outline-none focus:border-brass transition-colors"
-        />
+      {/* ── Payer Name (End Session only) ─────────────────────── */}
+      {mode === 'end' && (
+        <div className="mb-4 relative">
+          <label className="block text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">
+            Who is paying?
+            <span className="text-slate-500 normal-case font-normal ml-2">defaults to {session?.customerName || 'session customer'}</span>
+          </label>
+          <input
+            ref={inputRef}
+            value={payerName}
+            onChange={(e) => handleNameChange(e.target.value)}
+            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+            onBlur={() => { setTimeout(() => setShowSuggestions(false), 150); }}
+            onKeyDown={handleNameKeyDown}
+            placeholder={session?.customerName ? `Leave blank for ${session.customerName}` : "Enter payer's name"}
+            maxLength={100}
+            autoFocus
+            className="w-full rounded-xl bg-slate-800 border-2 border-surface-border px-4 py-3 text-base font-semibold text-white focus:outline-none focus:border-brass transition-colors"
+          />
 
-        {loserName && (
-          <button
-            type="button"
-            onClick={() => { setLoserName(''); setShowSuggestions(false); }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
-          </button>
-        )}
+          {payerName && (
+            <button
+              type="button"
+              onClick={() => { setPayerName(''); setShowSuggestions(false); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+            </button>
+          )}
 
-        {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute left-0 right-0 top-full mt-1 bg-slate-800 border-2 border-surface-border rounded-xl shadow-lg z-10 overflow-hidden">
-            {suggestions.map((s, i) => (
-              <button
-                key={s._id}
-                type="button"
-                onMouseDown={() => selectSuggestion(s.customerName)}
-                className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
-                  i === highlightIdx ? 'bg-brass-bg' : 'hover:bg-slate-700'
-                }`}
-              >
-                <div>
-                  <div className="text-base font-semibold text-ink">{s.customerName}</div>
-                  {s.totalCharged > 0 && (
-                    <div className="text-sm text-slate-400">
-                      {s.balance > 0
-                        ? `Rs ${s.balance.toLocaleString()} owed`
-                        : s.balance < 0
-                          ? `Rs ${Math.abs(s.balance).toLocaleString()} credit`
-                          : 'Settled'}
-                    </div>
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-1 bg-slate-800 border-2 border-surface-border rounded-xl shadow-lg z-10 overflow-hidden">
+              {suggestions.map((s, i) => (
+                <button
+                  key={s._id}
+                  type="button"
+                  onMouseDown={() => selectSuggestion(s.customerName)}
+                  className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
+                    i === highlightIdx ? 'bg-brass-bg' : 'hover:bg-slate-700'
+                  }`}
+                >
+                  <div>
+                    <div className="text-base font-semibold text-ink">{s.customerName}</div>
+                    {s.totalCharged > 0 && (
+                      <div className="text-sm text-slate-400">
+                        {s.balance > 0
+                          ? `Rs ${s.balance.toLocaleString()} owed`
+                          : s.balance < 0
+                            ? `Rs ${Math.abs(s.balance).toLocaleString()} credit`
+                            : 'Settled'}
+                      </div>
+                    )}
+                  </div>
+                  {s.balance > 0 && (
+                    <span className="text-sm font-bold text-occupied">
+                      Rs {s.balance.toLocaleString()}
+                    </span>
                   )}
-                </div>
-                {s.balance > 0 && (
-                  <span className="text-sm font-bold text-occupied">
-                    Rs {s.balance.toLocaleString()}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* ── Move to different table ───────────────────────────── */}
-      {allTables.filter((t) => t.status === 'available').length > 1 && (
+      {/* ── Move to different table (Keep on Tab only) ────────── */}
+      {mode === 'keep' && allTables.filter((t) => t.status === 'available').length > 1 && (
         <div className="mb-4">
-          <label className="block text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">Next Game On</label>
+          <label className="block text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">New Game On</label>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {availableTargets.map((t) => (
               <button
@@ -428,66 +460,68 @@ export default function NewGameModal({
         </div>
       )}
 
-      {/* ── New Game Type ─────────────────────────────────────── */}
-      <div className="mb-2">
-        <label className="block text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">
-          {moving ? 'Game Type on New Table' : 'Next Game Type'}
-        </label>
-        {!config ? (
-          <div className="text-sm text-slate-400 py-2">Loading rates…</div>
-        ) : activeGameTypes.length === 0 ? (
-          <div className="text-sm text-slate-400 py-2">No rates configured.</div>
-        ) : (
-          <div className="space-y-2">
-            <div className="flex flex-col gap-1.5">
-              {activeGameTypes.map((gt, i) => (
-                <button
-                  key={gt._id}
-                  onClick={() => setSelectedTypeIdx(i)}
-                  className={`flex items-center justify-between rounded-xl border-2 px-4 py-3 text-left transition-all ${
-                    selectedTypeIdx === i
-                      ? 'border-brass bg-brass-bg shadow-sm'
-                      : 'border-surface-border hover:border-slate-500 bg-slate-800'
-                  }`}
-                >
-                  <span className="text-base font-bold text-ink">{gt.name}</span>
-                  <span className="text-sm text-slate-400 font-semibold">
-                    {gt.hasSubtypes ? `${gt.subtypes.length} options` : `Rs ${gt.flatPrice}/hr`}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {gameType && gameType.hasSubtypes && gameType.subtypes.length > 0 && (
-              <div className="flex flex-col gap-1.5 mt-2">
-                {gameType.subtypes.map((sub, i) => (
+      {/* ── New Game Type (Keep on Tab only) ──────────────────── */}
+      {mode === 'keep' && (
+        <div className="mb-2">
+          <label className="block text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">
+            {moving ? 'Game Type on New Table' : 'Next Game Type'}
+          </label>
+          {!config ? (
+            <div className="text-sm text-slate-400 py-2">Loading rates…</div>
+          ) : activeGameTypes.length === 0 ? (
+            <div className="text-sm text-slate-400 py-2">No rates configured.</div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex flex-col gap-1.5">
+                {activeGameTypes.map((gt, i) => (
                   <button
-                    key={sub._id}
-                    onClick={() => setSelectedSubIdx(i)}
+                    key={gt._id}
+                    onClick={() => setSelectedTypeIdx(i)}
                     className={`flex items-center justify-between rounded-xl border-2 px-4 py-3 text-left transition-all ${
-                      selectedSubIdx === i
+                      selectedTypeIdx === i
                         ? 'border-brass bg-brass-bg shadow-sm'
                         : 'border-surface-border hover:border-slate-500 bg-slate-800'
                     }`}
                   >
-                    <span className="text-base font-semibold text-ink">{sub.name}</span>
-                    <span className="text-xl font-extrabold text-brass">Rs {sub.price}</span>
+                    <span className="text-base font-bold text-ink">{gt.name}</span>
+                    <span className="text-sm text-slate-400 font-semibold">
+                      {gt.hasSubtypes ? `${gt.subtypes.length} options` : `Rs ${gt.flatPrice}/hr`}
+                    </span>
                   </button>
                 ))}
               </div>
-            )}
 
-            {gameType && !gameType.hasSubtypes && (
-              <div className="rounded-xl border-2 border-brass/20 bg-brass-bg p-4 text-center">
-                <div className="text-3xl font-extrabold text-brass">Rs {gameType.flatPrice}/hr</div>
-                <div className="text-sm text-slate-400 font-semibold mt-0.5">
-                  Then Rs {gameType.perMinuteRate}/min overtime
+              {gameType && gameType.hasSubtypes && gameType.subtypes.length > 0 && (
+                <div className="flex flex-col gap-1.5 mt-2">
+                  {gameType.subtypes.map((sub, i) => (
+                    <button
+                      key={sub._id}
+                      onClick={() => setSelectedSubIdx(i)}
+                      className={`flex items-center justify-between rounded-xl border-2 px-4 py-3 text-left transition-all ${
+                        selectedSubIdx === i
+                          ? 'border-brass bg-brass-bg shadow-sm'
+                          : 'border-surface-border hover:border-slate-500 bg-slate-800'
+                      }`}
+                    >
+                      <span className="text-base font-semibold text-ink">{sub.name}</span>
+                      <span className="text-xl font-extrabold text-brass">Rs {sub.price}</span>
+                    </button>
+                  ))}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+              )}
+
+              {gameType && !gameType.hasSubtypes && (
+                <div className="rounded-xl border-2 border-brass/20 bg-brass-bg p-4 text-center">
+                  <div className="text-3xl font-extrabold text-brass">Rs {gameType.flatPrice}/hr</div>
+                  <div className="text-sm text-slate-400 font-semibold mt-0.5">
+                    Then Rs {gameType.perMinuteRate}/min overtime
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-2 text-occupied bg-occupied-bg border-2 border-occupied/20 rounded-xl px-4 py-2.5 text-sm font-semibold mt-3">

@@ -76,6 +76,12 @@ const SessionSchema = new Schema(
     // it can be carried into the RevenueLog audit trail when this page is
     // eventually closed (either by Ending or by switching again).
     switchedFromTableNumber: { type: Number, default: null },
+    // Chain tracking for Keep on Tab: links multiple tables playing
+    // simultaneously under one customer. When End Session is called on
+    // any table in the chain, ALL tables in the chain are ended and
+    // billed together.
+    chainId: { type: String, default: null }, // shared across all linked sessions
+    sourceTableId: { type: String, default: null }, // which table this session was derived from
     // Accumulated charges from previous games in this session.
     // When staff taps "New Game", the current game's bill is frozen here
     // and the timer resets for the next game.
