@@ -149,10 +149,10 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // Fetch the customer's account tab
+    // Fetch the customer's account tab (case-insensitive name match)
     const account = customerId
       ? await CustomerAccount.findOne({ customerId }).lean()
-      : await CustomerAccount.findOne({ customerName: normName(trimmed) }).lean();
+      : await CustomerAccount.findOne({ customerName: new RegExp(`^${trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }).lean();
 
     return NextResponse.json({
       success: true,
@@ -214,9 +214,10 @@ export async function PATCH(req: NextRequest) {
 
       // Also update CustomerAccount if exists
       if (log.customerId || log.customerName) {
+        const nameRegex = log.customerName ? new RegExp(`^${log.customerName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') : null;
         const account = log.customerId
           ? await CustomerAccount.findOne({ customerId: log.customerId })
-          : await CustomerAccount.findOne({ customerName: log.customerName?.trim().toLowerCase() });
+          : nameRegex ? await CustomerAccount.findOne({ customerName: nameRegex }) : null;
         if (account) {
           account.balance = Math.max(0, account.balance - discountAmount);
           account.transactions.push({
@@ -242,10 +243,12 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Validate payment doesn't exceed remaining balance
+    // Must account for discounts (negative settlements) to avoid overpayment
     const log = await RevenueLog.findById(logId);
     if (!log) return fail('Revenue log not found', 404);
     const alreadyPaid = (log.settlements ?? []).reduce((sum: number, s: any) => s.amount > 0 ? sum + s.amount : 0, 0);
-    const remaining = Math.max(0, log.totalRevenue - alreadyPaid);
+    const alreadyDiscounted = Math.abs((log.settlements ?? []).reduce((sum: number, s: any) => s.amount < 0 ? sum + s.amount : 0, 0));
+    const remaining = Math.max(0, log.totalRevenue - alreadyPaid - alreadyDiscounted);
     if (paymentAmount > remaining + 1) {
       return fail(`Payment Rs ${paymentAmount} exceeds remaining balance of Rs ${Math.floor(remaining)}`);
     }
@@ -264,9 +267,10 @@ export async function PATCH(req: NextRequest) {
     // Bug fix: Also decrement the CustomerAccount balance so the
     // "Outstanding" stat and BillPopup suggestions stay accurate.
     if (log.customerId || log.customerName) {
+      const acctNameRegex = log.customerName ? new RegExp(`^${log.customerName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') : null;
       const account = log.customerId
         ? await CustomerAccount.findOne({ customerId: log.customerId })
-        : await CustomerAccount.findOne({ customerName: log.customerName?.trim().toLowerCase() });
+        : acctNameRegex ? await CustomerAccount.findOne({ customerName: acctNameRegex }) : null;
       if (account) {
         account.balance = Math.max(0, account.balance - paymentAmount);
         account.totalPaid += paymentAmount;
@@ -323,9 +327,10 @@ export async function DELETE(req: NextRequest) {
 
     // Add the amount back to CustomerAccount
     if (log.customerId || log.customerName) {
+      const acctNameRegex = log.customerName ? new RegExp(`^${log.customerName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') : null;
       const account = log.customerId
         ? await CustomerAccount.findOne({ customerId: log.customerId })
-        : await CustomerAccount.findOne({ customerName: log.customerName?.trim().toLowerCase() });
+        : acctNameRegex ? await CustomerAccount.findOne({ customerName: acctNameRegex }) : null;
       if (account) {
         account.balance += voidAmount;
         account.totalPaid = Math.max(0, account.totalPaid - voidAmount);

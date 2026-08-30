@@ -28,10 +28,19 @@ export async function GET(req: NextRequest) {
 
     const totals = logs.reduce(
       (acc, log) => {
-        acc.tableRentalRevenue += log.tableRentalRevenue;
-        acc.menuSalesRevenue += log.menuSalesRevenue;
-        acc.totalRevenue += log.totalRevenue;
-        if (log.isPrivateRoom) acc.roomRentalRevenue += log.tableRentalRevenue;
+        // Subtract discounts from settlements to get net revenue
+        const discounts = Math.abs(
+          (log.settlements ?? []).reduce((sum: number, s: any) => s.amount < 0 ? sum + s.amount : 0, 0)
+        );
+        const netRevenue = Math.max(0, log.totalRevenue - discounts);
+        // Distribute discount proportionally across table and menu revenue
+        const discountRatio = log.totalRevenue > 0 ? discounts / log.totalRevenue : 0;
+        const netTable = Math.round((log.tableRentalRevenue * (1 - discountRatio)) * 100) / 100;
+        const netMenu = Math.round((log.menuSalesRevenue * (1 - discountRatio)) * 100) / 100;
+        acc.tableRentalRevenue += netTable;
+        acc.menuSalesRevenue += netMenu;
+        acc.totalRevenue += netRevenue;
+        if (log.isPrivateRoom) acc.roomRentalRevenue += netTable;
         return acc;
       },
       { tableRentalRevenue: 0, roomRentalRevenue: 0, menuSalesRevenue: 0, totalRevenue: 0 }

@@ -23,15 +23,17 @@ export async function GET(req: NextRequest) {
       // customers who share a common name (e.g. "Ahmed") from merging.
       const account = await CustomerAccount.findOne({ customerId });
       if (!account && name) {
-        // Fallback: maybe legacy record without customerId
-        const fallback = await CustomerAccount.findOne({ customerName: normName(name) });
+        // Fallback: maybe legacy record without customerId — case-insensitive
+        const nameRegex = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+        const fallback = await CustomerAccount.findOne({ customerName: nameRegex });
         return ok(fallback ?? null);
       }
       return ok(account ?? null);
     }
 
     if (name) {
-      const account = await CustomerAccount.findOne({ customerName: normName(name) });
+      const nameRegex = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+      const account = await CustomerAccount.findOne({ customerName: nameRegex });
       if (!account) return ok(null);
       return ok(account);
     }
@@ -60,24 +62,27 @@ export async function POST(req: NextRequest) {
 
     // When a customerId is provided, look up by customerId first — this
     // ensures two different customers named "Ahmed" never merge into the
-    // same account/balance.
+    // same account/balance. Without customerId, use case-insensitive name
+    // match so "Ali Raza" and "ali raza" resolve to the same account.
+    const nameRegex = new RegExp(`^${customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
     const lookup = customerId
       ? { customerId }
-      : { customerName: normName(customerName) };
+      : { customerName: nameRegex };
 
     const account = await CustomerAccount.findOneAndUpdate(
       lookup,
       {
         $setOnInsert: {
           customerId,
-          customerName: normName(customerName),
+          customerName: customerName, // store as-typed, not lowercased
           balance: 0,
           totalCharged: 0,
           totalPaid: 0,
           transactions: [],
         },
         // Keep displayName (customerName) in sync if the user changes it
-        ...(customerId ? { $set: { customerName: normName(customerName) } } : {}),
+        // Only update if customerId is provided (safe to overwrite)
+        ...(customerId ? { $set: { customerName: customerName } } : {}),
         ...(body.creditLimit != null && { creditLimit: body.creditLimit }),
         ...(body.notes != null && { notes: body.notes }),
         ...(body.isActive != null && { isActive: body.isActive }),
@@ -102,12 +107,13 @@ export async function PATCH(req: NextRequest) {
     if (typeof amount !== 'number' || amount <= 0) return fail('amount is required and must be a positive number');
     if (amount < 1) return fail('amount must be at least Rs 1');
 
-    // Find the account
+    // Find the account (case-insensitive name match)
     let account;
     if (customerId) {
       account = await CustomerAccount.findOne({ customerId });
     } else if (customerName) {
-      account = await CustomerAccount.findOne({ customerName: normName(customerName) });
+      const nameRegex = new RegExp(`^${customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+      account = await CustomerAccount.findOne({ customerName: nameRegex });
     }
     if (!account) return fail('Customer account not found', 404);
 

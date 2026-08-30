@@ -96,6 +96,8 @@ export default function RevenueReport() {
           ? `${acc.length} games (${acc.map((c: any) => c.loser ? `${c.loser} lost` : '').filter(Boolean).join(', ')})`
           : '—';
         const paid = (l.settlements ?? []).reduce((s: number, st: any) => st.amount > 0 ? s + st.amount : 0, 0);
+        const discounts = Math.abs((l.settlements ?? []).reduce((s: number, st: any) => st.amount < 0 ? s + st.amount : 0, 0));
+        const netRevenue = Math.max(0, l.totalRevenue - discounts);
         return [
           new Date(l.date).toLocaleDateString(),
           l.isPrivateRoom ? `Room ${l.tableNumber}` : `Table ${l.tableNumber}`,
@@ -104,9 +106,9 @@ export default function RevenueReport() {
           accLabel,
           l.tableRentalRevenue.toLocaleString(),
           l.menuSalesRevenue.toLocaleString(),
-          l.totalRevenue.toLocaleString(),
+          netRevenue.toLocaleString(),
           paid > 0 ? `Rs ${paid.toLocaleString()}` : '—',
-          getPaymentStatus(l.totalRevenue, l.settlements ?? []),
+          getPaymentStatus(netRevenue, l.settlements ?? []),
         ];
       }),
       foot: [[
@@ -138,8 +140,14 @@ export default function RevenueReport() {
     return sum + disc;
   }, 0) ?? 0;
   const totalUnpaid = (report?.totals.totalRevenue ?? 0) - totalPaid - totalDiscounts;
-  const paidCount = report?.logs.filter((l) => getPaymentStatus(l.totalRevenue, l.settlements ?? []) === 'paid').length ?? 0;
-  const unpaidCount = report?.logs.filter((l) => getPaymentStatus(l.totalRevenue, l.settlements ?? []) === 'unpaid').length ?? 0;
+  const paidCount = report?.logs.filter((l) => {
+    const disc = Math.abs((l.settlements ?? []).reduce((s: number, st: any) => st.amount < 0 ? s + st.amount : s, 0));
+    return getPaymentStatus(Math.max(0, l.totalRevenue - disc), l.settlements ?? []) === 'paid';
+  }).length ?? 0;
+  const unpaidCount = report?.logs.filter((l) => {
+    const disc = Math.abs((l.settlements ?? []).reduce((s: number, st: any) => st.amount < 0 ? s + st.amount : s, 0));
+    return getPaymentStatus(Math.max(0, l.totalRevenue - disc), l.settlements ?? []) === 'unpaid';
+  }).length ?? 0;
 
   return (
     <div className="p-5">
@@ -232,9 +240,10 @@ export default function RevenueReport() {
               <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2">Sessions ({report.logs.length})</div>
               <div className="space-y-2">
                 {report.logs.map((log, i) => {
-                  const status = getPaymentStatus(log.totalRevenue, log.settlements ?? []);
                   const paid = (log.settlements ?? []).reduce((sum, s) => s.amount > 0 ? sum + s.amount : 0, 0);
                   const discount = Math.abs((log.settlements ?? []).reduce((sum: number, s: any) => s.amount < 0 ? sum + s.amount : 0, 0));
+                  const netRevenue = Math.max(0, log.totalRevenue - discount);
+                  const status = getPaymentStatus(netRevenue, log.settlements ?? []);
 
                   return (
                     <button
@@ -264,8 +273,8 @@ export default function RevenueReport() {
                         </div>
                       </div>
                       <div className="text-right shrink-0 ml-3">
-                        <div className="font-mono text-lg font-extrabold text-ink tabular-nums">Rs {log.totalRevenue.toLocaleString()}</div>
-                        {paid > 0 && paid < log.totalRevenue && (
+                        <div className="font-mono text-lg font-extrabold text-ink tabular-nums">Rs {netRevenue.toLocaleString()}</div>
+                        {paid > 0 && paid < netRevenue && (
                           <div className="text-xs text-available font-semibold">Paid Rs {paid.toLocaleString()}</div>
                         )}
                         {discount > 0 && (
@@ -310,10 +319,11 @@ export default function RevenueReport() {
 
 // ═══ Session Detail Popup ═══════════════════════════════════════
 function SessionDetailPopup({ log, onClose }: { log: LogType; onClose: () => void }) {
-  const status = getPaymentStatus(log.totalRevenue, log.settlements ?? []);
   const totalPaid = (log.settlements ?? []).reduce((sum, s) => s.amount > 0 ? sum + s.amount : 0, 0);
   const totalDiscount = Math.abs((log.settlements ?? []).reduce((sum: number, s: any) => s.amount < 0 ? sum + s.amount : 0, 0));
-  const remaining = Math.max(0, log.totalRevenue - totalPaid - totalDiscount);
+  const netRevenue = Math.max(0, log.totalRevenue - totalDiscount);
+  const status = getPaymentStatus(netRevenue, log.settlements ?? []);
+  const remaining = Math.max(0, netRevenue - totalPaid);
   const acc = log.accumulatedCharges ?? [];
   const accTotal = acc.reduce((sum, c) => sum + c.gameTotal + c.foodTotal, 0);
 
@@ -346,7 +356,7 @@ function SessionDetailPopup({ log, onClose }: { log: LogType; onClose: () => voi
           {status === 'paid' ? '✓ Paid' : status === 'partial' ? '◐ Partial' : '⚠ Unpaid'}
         </span>
         <span className="font-mono text-3xl font-extrabold text-brass tabular-nums">
-          Rs {log.totalRevenue.toLocaleString()}
+          Rs {netRevenue.toLocaleString()}
         </span>
       </div>
 
@@ -421,7 +431,7 @@ function SessionDetailPopup({ log, onClose }: { log: LogType; onClose: () => voi
           )}
           <div className="px-4 py-3 flex items-center justify-between bg-brass-bg/30">
             <span className="text-lg font-extrabold text-ink">Total</span>
-            <span className="font-mono text-2xl font-extrabold text-brass tabular-nums">Rs {log.totalRevenue.toLocaleString()}</span>
+            <span className="font-mono text-2xl font-extrabold text-brass tabular-nums">Rs {netRevenue.toLocaleString()}</span>
           </div>
         </div>
       </div>

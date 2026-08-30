@@ -36,8 +36,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (typeof body.hourlyRate !== 'number' || body.hourlyRate <= 0) return fail('hourlyRate must be a positive number');
     if (body.flatPrice != null && (typeof body.flatPrice !== 'number' || body.flatPrice < 0)) return fail('flatPrice must be a non-negative number');
 
-    const sourceTable = await Table.findById(params.id);
-    if (!sourceTable) return fail('Table not found', 404);
+    // Atomic read: only proceed if the table is occupied.
+    // Prevents race condition where End Session or another New Game
+    // already consumed the session.
+    const sourceTable = await Table.findOne({ _id: params.id, status: 'occupied' });
+    if (!sourceTable) return fail('Table not found or already free', 404);
     if (!sourceTable.currentSession) return fail('No active session on this table', 409);
 
     const session = sourceTable.currentSession as any;
@@ -96,13 +99,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // ── 3. If billNow, charge the loser's CustomerAccount ───────
     if (billNow && loser) {
-      // Look up by name first — the loser may be different from the session owner
-      let account = await CustomerAccount.findOne({ customerName: normName(loser) });
+      // Case-insensitive lookup — "Ali Raza" and "ali raza" are the same person.
+      // Store the name as-typed (preserves casing for display).
+      const nameRegex = new RegExp(`^${loser.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+      let account = await CustomerAccount.findOne({ customerName: nameRegex });
       if (!account) {
         // New customer — give them their own customerId (not the session owner's)
         account = await CustomerAccount.create({
           customerId: nanoid(8),
-          customerName: normName(loser),
+          customerName: loser, // store as-typed, not lowercased
           balance: 0,
           totalCharged: 0,
           totalPaid: 0,
@@ -186,8 +191,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // ── 5. Start fresh game on target ───────────────────────────
-    targetTable.status = 'occupied';
-    targetTable.currentSession = {
+    // Use findOneAndUpdate with a session guard to prevent double-freeze:
+    // if another request already processed this session, the update will
+    // fail (session changed) and we return 409 instead of silently
+    // duplicating the accumulated charge.
+    const newSession = {
       customerId: session.customerId,
       customerName: session.customerName,
       loser,
@@ -211,7 +219,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       switchedFromTableNumber: moving ? sourceTable.tableNumber : (session.switchedFromTableNumber ?? null),
     } as any;
 
-    await targetTable.save();
+    // Guard: only update if this table is still occupied AND the session
+    // hasn't changed since we read it (startTime is unique per session).
+    const savedTable = await Table.findOneAndUpdate(
+      { _id: targetTable._id, status: 'occupied', 'currentSession.startTime': session.startTime },
+      { $set: { currentSession: newSession } },
+      { new: true }
+    );
+    if (!savedTable) {
+      return fail('This session was already closed or modified by another action. Please refresh.', 409);
+    }
 
     return ok({
       previousBill: bill,

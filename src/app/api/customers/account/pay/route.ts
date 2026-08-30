@@ -16,7 +16,8 @@ export async function POST(req: NextRequest) {
     if (!customerName) return fail('customerName is required');
     if (typeof body.amount !== 'number' || body.amount <= 0) return fail('amount must be a positive number');
 
-    const account = await CustomerAccount.findOne({ customerName });
+    const nameRegex = new RegExp(`^${customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+    const account = await CustomerAccount.findOne({ customerName: nameRegex });
     if (!account) return fail('Customer account not found.', 404);
 
     const transaction = {

@@ -174,6 +174,9 @@ export default function NewGameModal({
       const mins = subtype ? subtype.gameMinutes : 60;
       const label = subtype ? `${gameType.name} - ${subtype.name}` : gameType.name;
 
+      // For Keep on Tab: use session customer name if no loser entered
+      const effectiveLoser = billNow ? loser : (loser || session?.customerName || '');
+
       await api.post(`/api/tables/${table._id}/new-game`, {
         targetTableId,
         gameType: label,
@@ -186,7 +189,7 @@ export default function NewGameModal({
         gracePeriodMinutes: 0,
         flatSurcharge: 0,
         minimumMinutes: null,
-        loser,
+        loser: effectiveLoser,
         billNow,
       });
       onDone();
@@ -199,15 +202,15 @@ export default function NewGameModal({
 
   // End current session and start fresh (for different player pairs)
   async function handleNewSession() {
-    if (!loser) { setError('Enter the loser\'s name to end this session.'); return; }
     if (loser.length > 100) { setError('Loser name cannot exceed 100 characters.'); return; }
     setBusy(true);
     setError(null);
     try {
-      // End current session with the loser paying
+      // End current session — use loser name if provided, otherwise session customer name
+      const payerName = loser || session?.customerName || '';
       await api.post(`/api/tables/${table._id}/end`, {
         closedBy: 'Staff',
-        customerName: loser,
+        customerName: payerName,
       });
       onDone();
     } catch (e: any) {
@@ -225,15 +228,15 @@ export default function NewGameModal({
       >
         Cancel
       </button>
-      {/* New Session — ends current, starts fresh (different players) */}
+      {/* End Session — ends everything, payer must be named */}
       <button
-        disabled={busy || !loser}
+        disabled={busy}
         onClick={handleNewSession}
         className="px-5 py-3 rounded-xl text-base font-bold bg-occupied text-white shadow-md hover:bg-occupied/90 active:scale-[0.98] transition-all disabled:opacity-50"
       >
         {busy ? '…' : `End Session`}
       </button>
-      {/* Bill Now — primary action */}
+      {/* Bill Now — requires loser name */}
       <button
         disabled={busy || !config || !loser}
         onClick={() => handleAction(true)}
@@ -241,7 +244,7 @@ export default function NewGameModal({
       >
         {busy ? 'Processing…' : `💰 Bill ${loser || '…'} — Rs ${(currentBill?.total ?? 0).toLocaleString()}`}
       </button>
-      {/* Keep on Tab — secondary action */}
+      {/* Keep on Tab — no loser name needed */}
       <button
         disabled={busy || !config}
         onClick={() => handleAction(false)}
@@ -255,7 +258,7 @@ export default function NewGameModal({
   return (
     <ModalShell
       title="New Game"
-      subtitle={`${table.label ?? `Table ${table.tableNumber}`} — game ending, who lost?`}
+      subtitle={`${table.label ?? `Table ${table.tableNumber}`} — freeze current game, start fresh`}
       onClose={onClose}
       busy={busy}
       footer={footer}
@@ -343,6 +346,7 @@ export default function NewGameModal({
       <div className="mb-4 relative">
         <label className="block text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">
           Who lost this round?
+          <span className="text-slate-500 normal-case font-normal ml-2">optional for Keep on Tab</span>
         </label>
         <input
           ref={inputRef}
@@ -351,7 +355,7 @@ export default function NewGameModal({
           onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
           onBlur={() => { setTimeout(() => setShowSuggestions(false), 150); }}
           onKeyDown={handleNameKeyDown}
-          placeholder="Enter loser's name"
+          placeholder={session?.customerName ? `Leave blank to use ${session.customerName}` : "Enter loser's name (optional)"}
           maxLength={100}
           autoFocus
           className="w-full rounded-xl bg-slate-800 border-2 border-surface-border px-4 py-3 text-base font-semibold text-white focus:outline-none focus:border-brass transition-colors"
