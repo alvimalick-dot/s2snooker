@@ -125,7 +125,7 @@ export default function TableRatesManager() {
   if (!config) return <div className="text-slate-400 py-8 text-center">Loading rates…</div>;
 
   return (
-    <div className="space-y-4 p-3 sm:p-5">
+    <div className="rates-screen space-y-4 p-3 sm:p-5">
       {/* ── Standard Tables Section ──────────────────────────── */}
       <SectionPanel
         section="tables"
@@ -210,7 +210,7 @@ function SectionPanel({
   defaultOvertimeRate: number;
 }) {
   return (
-    <div className="bg-surface-card rounded-2xl border border-surface-border overflow-hidden">
+    <div className="rates-section bg-surface-card rounded-2xl border border-surface-border overflow-hidden">
       {/* Section header */}
       <div className="px-4 sm:px-5 py-4 border-b border-surface-border bg-surface-dark/40">
         <div className="flex items-start gap-3 justify-between">
@@ -308,7 +308,7 @@ function GameTypeCard({
   onUpdateSub: (subIdx: number, field: keyof Subtype, value: any) => void;
 }) {
   return (
-    <div className="bg-surface-dark rounded-xl border border-surface-border p-4">
+    <div className="rate-card bg-surface-dark rounded-xl border border-surface-border p-4">
       {/* Type header */}
       <div className="flex flex-wrap items-center gap-3 justify-between mb-3">
         <div className="flex min-w-0 flex-wrap items-center gap-3">

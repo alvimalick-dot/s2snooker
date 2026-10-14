@@ -42,7 +42,8 @@ module.exports = {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        mono: ['Share Tech Mono', 'JetBrains Mono', 'monospace'],
+        display: ['Bebas Neue', 'Impact', 'sans-serif'],
       },
       fontSize: {
         // Fluid scale: comfortable at 100% zoom, not oversized at 80%

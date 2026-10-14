@@ -140,7 +140,7 @@ export default function CustomerHistory() {
   const isToday = date === todayStr();
 
   return (
-    <div className="bg-surface-card rounded-2xl border border-surface-border p-5 h-full flex flex-col">
+    <div className="customer-screen bg-surface-card rounded-2xl border border-surface-border p-5 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="text-xl font-extrabold text-ink">Customer Accounts</div>
@@ -273,14 +273,16 @@ function List({ customers, loading, tab, date, onSelect }: {
           <button
             key={rowKey}
             onClick={() => onSelect(c)}
-            className={`w-full flex items-center justify-between rounded-xl border-2 px-4 py-3.5 text-left transition-all active:scale-[0.99] ${
+            className={`customer-row w-full flex items-center justify-between rounded-xl border-2 px-4 py-3.5 text-left transition-all active:scale-[0.99] ${
               isActive
                 ? 'border-available/30 bg-available-bg hover:border-available/50 shadow-sm'
                 : 'border-surface-border bg-slate-800 hover:border-slate-500'
             }`}
           >
             <div className="flex items-center gap-3 min-w-0">
-              <StatusDot status={c.status} />
+                <span className={`customer-avatar ${isActive ? 'customer-avatar-live' : ''}`} aria-hidden="true">
+                  {(c.customerName || 'Guest').split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}
+                </span>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-base font-bold ${isActive ? 'text-ink' : 'text-slate-300'}`}>{c.customerName}</span>

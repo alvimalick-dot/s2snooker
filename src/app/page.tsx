@@ -80,7 +80,7 @@ export default function DashboardPage() {
   const windowWidth = useWindowWidth();
 
   // Responsive column counts
-  const mainCols = windowWidth < 640 ? 1 : windowWidth < 1024 ? 2 : windowWidth < 1440 ? 3 : 4;
+  const mainCols = windowWidth < 640 ? 1 : windowWidth < 768 ? 2 : 4;
   const isMobile = windowWidth < 768;
 
   const refresh = useCallback(async () => {
@@ -186,7 +186,7 @@ export default function DashboardPage() {
   if (!authenticated) return <LoginScreen onLogin={() => setAuthenticated(true)} />;
 
   return (
-    <div className="min-h-dvh flex flex-col bg-surface-dark">
+    <div className="hall-app min-h-dvh flex flex-col bg-surface-dark">
       <Header
         clubName={CLUB_NAME}
         tab={tab}
@@ -233,8 +233,8 @@ export default function DashboardPage() {
 
             {/* Dashboard sub-tab */}
             {floorSubTab === 'dashboard' && tables.length > 0 ? (
-              <div className="min-w-0 flex flex-col lg:flex-row gap-3 sm:gap-4">
-                <div className="min-w-0 flex-1 flex flex-col">
+              <div className="floor-dashboard min-w-0 flex flex-col lg:flex-row gap-3 sm:gap-4">
+                <div className="floor-standard min-w-0 flex-1 flex flex-col">
                   <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-slate-400 mb-2 sm:mb-3">Standard Tables</div>
                   <FitGrid tables={mainTables} cols={mainCols}>
                     {(t) => (
@@ -253,7 +253,7 @@ export default function DashboardPage() {
                 </div>
 
                 {privateTables.length > 0 && (
-                  <div className="min-w-0 w-full lg:w-80 xl:w-96 shrink-0 flex flex-col">
+                  <div className="floor-private min-w-0 w-full lg:w-80 xl:w-96 shrink-0 flex flex-col">
                     <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-slate-400 mb-2 sm:mb-3">Private Room</div>
                     <FitGrid tables={privateTables} cols={isMobile ? mainCols : 1}>
                       {(t) => (
@@ -293,7 +293,7 @@ export default function DashboardPage() {
           <>
             <Sidebar active={adminTab} onSelect={setAdminTab} />
             <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-6 flex flex-col">
-              <div className="flex-1 overflow-y-auto rounded-2xl border-2 border-surface-border bg-surface-card/40">
+              <div className="admin-workspace flex-1 overflow-y-auto rounded-2xl border-2 border-surface-border bg-surface-card/40">
                 {adminTab === 'rates' && <TableRatesManager />}
                 {adminTab === 'menu' && <MenuManager menu={menu} onChanged={refresh} />}
                 {adminTab === 'reports' && <RevenueReport />}

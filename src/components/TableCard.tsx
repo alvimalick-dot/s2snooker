@@ -5,6 +5,7 @@ import { TableDoc } from '@/lib/types';
 import { computeSessionBill } from '@/lib/billing';
 import { formatElapsed, useClock, reservationMinutesPast } from '@/lib/useClock';
 import { api } from '@/lib/api';
+import TableArt, { RACKED_BALLS, SCATTERED_BALLS } from '@/components/TableArt';
 
 export default function TableCard({
   table, staffName, onChanged, onOpenStart, onOpenOrder, onOpenEnd, onOpenNewGame,
@@ -77,7 +78,7 @@ export default function TableCard({
   const isPaused = table.currentSession?.isPaused;
 
   return (
-    <div className={`flex flex-col rounded-2xl border-2 overflow-hidden transition-all ${
+    <div className={`table-card flex flex-col rounded-2xl border-2 overflow-hidden transition-all ${
       isOccupied
         ? hasOvertime
           ? 'border-occupied shadow-glow-red'
@@ -86,7 +87,9 @@ export default function TableCard({
           ? 'border-available/40 bg-available-bg shadow-card'
           : 'border-reserved/40 bg-reserved-bg shadow-card'
     }`}>
-      {/* ── Status strip ─────────────────────────────────────── */}
+      <div className={`table-lamp ${isOccupied ? (hasOvertime ? 'table-lamp-overtime' : 'table-lamp-on') : 'table-lamp-off'}`} aria-hidden="true">
+        <span />
+      </div>
       <div className={`px-4 py-2 flex items-center justify-between font-bold text-xs uppercase tracking-wider ${
         isOccupied
           ? hasOvertime
@@ -109,6 +112,24 @@ export default function TableCard({
       </div>
 
       <div className={`overflow-hidden px-3 py-2 flex flex-col gap-2 ${isOccupied ? 'bg-surface-card' : ''}`}>
+
+        <div className={`table-art-wrap ${isOccupied ? 'table-art-occupied' : isReserved ? 'table-art-reserved' : ''}`}>
+          <TableArt
+            balls={isOccupied ? SCATTERED_BALLS : RACKED_BALLS}
+            cue={isOccupied ? 'aim' : 'rail'}
+            chalk={isOccupied}
+            luxe={table.isPrivateRoom}
+            className="table-art"
+          />
+          {table.isPrivateRoom && <span className="private-plaque">PRIVATE</span>}
+          {isReserved && table.reservation && (
+            <div className="reservation-tent">
+              <strong>RESERVED</strong>
+              <span>{table.reservation.customerName}</span>
+              <small>{table.reservation.time}</small>
+            </div>
+          )}
+        </div>
 
         {/* === OCCUPIED === */}
         {isOccupied && table.currentSession && bill && (
