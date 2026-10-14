@@ -212,8 +212,8 @@ function SectionPanel({
   return (
     <div className="bg-surface-card rounded-2xl border border-surface-border overflow-hidden">
       {/* Section header */}
-      <div className="px-5 py-4 border-b border-surface-border bg-surface-dark/40">
-        <div className="flex items-center justify-between">
+      <div className="px-4 sm:px-5 py-4 border-b border-surface-border bg-surface-dark/40">
+        <div className="flex items-start gap-3 justify-between">
           <div>
             <div className="flex items-center gap-2.5">
               <span className={`w-2.5 h-2.5 rounded-full ${section === 'tables' ? 'bg-brass' : 'bg-occupied'}`} />
@@ -225,7 +225,7 @@ function SectionPanel({
       </div>
 
       {/* Game types */}
-      <div className="p-5 space-y-4">
+      <div className="p-3 sm:p-5 space-y-4">
         {types.length === 0 ? (
           <div className="text-center py-6">
             <div className="text-3xl mb-2">🎱</div>
@@ -310,12 +310,12 @@ function GameTypeCard({
   return (
     <div className="bg-surface-dark rounded-xl border border-surface-border p-4">
       {/* Type header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3 justify-between mb-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <input
             value={gt.name}
             onChange={(e) => onUpdateField('name', e.target.value)}
-            className="text-lg font-bold bg-transparent border-b-2 border-surface-border focus:outline-none focus:border-brass/50 w-48 text-white"
+            className="text-lg font-bold bg-transparent border-b-2 border-surface-border focus:outline-none focus:border-brass/50 w-40 sm:w-48 text-white"
           />
           <label className="flex items-center gap-2 text-xs text-slate-400">
             <input
@@ -362,43 +362,56 @@ function GameTypeCard({
       {/* Subtypes table */}
       {gt.hasSubtypes && (
         <>
-          <div className="overflow-x-auto -mx-1 px-1">
-          <div className="min-w-[500px]">
-          <div className="grid grid-cols-4 gap-2 sm:gap-3 text-[10px] text-slate-400 uppercase tracking-wider mb-2 px-1">
+          <div className="rate-subtype-scroll -mx-1 px-1">
+          <div>
+          <div className="rate-subtype-grid grid grid-cols-4 gap-2 sm:gap-3 text-[10px] text-slate-400 uppercase tracking-wider mb-2 px-1">
             <div>Name</div>
             <div>Rate (Rs)</div>
             <div>Per Min (Rs)</div>
             <div>Window (min)</div>
           </div>
           {gt.subtypes.map((sub, subIdx) => (
-            <div key={sub._id ?? subIdx} className="grid grid-cols-4 gap-2 sm:gap-3 mb-2 items-center">
-              <input
-                value={sub.name}
-                onChange={(e) => onUpdateSub(subIdx, 'name' as any, e.target.value)}
-                className="rounded-xl bg-slate-800 border border-surface-border px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brass/50"
-              />
-              <input
-                type="number"
-                value={sub.price}
-                onChange={(e) => onUpdateSub(subIdx, 'price', Number(e.target.value) || 0)}
-                className="rounded-xl bg-slate-800 border border-surface-border px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-brass/50"
-              />
-              <input
-                type="number"
-                value={sub.perMinuteRate}
-                onChange={(e) => onUpdateSub(subIdx, 'perMinuteRate', Number(e.target.value) || defaultOvertimeRate)}
-                className="rounded-xl bg-slate-800 border border-surface-border px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-brass/50"
-              />
-              <div className="flex items-center gap-2">
+            <div key={sub._id ?? subIdx} className="rate-subtype-grid grid grid-cols-4 gap-2 sm:gap-3 mb-2 items-center">
+              <label className="rate-field">
+                <span>Name</span>
+                <input
+                  value={sub.name}
+                  onChange={(e) => onUpdateSub(subIdx, 'name' as any, e.target.value)}
+                  className="w-full rounded-xl bg-slate-800 border border-surface-border px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brass/50"
+                />
+              </label>
+              <label className="rate-field">
+                <span>Rate (Rs)</span>
                 <input
                   type="number"
-                  value={sub.gameMinutes}
-                  onChange={(e) => onUpdateSub(subIdx, 'gameMinutes', Number(e.target.value) || 0)}
-                  className="rounded-xl bg-slate-800 border border-surface-border px-3 py-2.5 text-sm font-mono w-20 text-white focus:outline-none focus:border-brass/50"
+                  value={sub.price}
+                  onChange={(e) => onUpdateSub(subIdx, 'price', Number(e.target.value) || 0)}
+                  className="w-full rounded-xl bg-slate-800 border border-surface-border px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-brass/50"
                 />
+              </label>
+              <label className="rate-field">
+                <span>Per Min (Rs)</span>
+                <input
+                  type="number"
+                  value={sub.perMinuteRate}
+                  onChange={(e) => onUpdateSub(subIdx, 'perMinuteRate', Number(e.target.value) || defaultOvertimeRate)}
+                  className="w-full rounded-xl bg-slate-800 border border-surface-border px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-brass/50"
+                />
+              </label>
+              <div className="rate-field flex items-end gap-2">
+                <label className="min-w-0 flex-1">
+                  <span>Window (min)</span>
+                  <input
+                    type="number"
+                    value={sub.gameMinutes}
+                    onChange={(e) => onUpdateSub(subIdx, 'gameMinutes', Number(e.target.value) || 0)}
+                    className="w-full rounded-xl bg-slate-800 border border-surface-border px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-brass/50"
+                  />
+                </label>
                 <button
                   onClick={() => onRemoveSub(subIdx)}
-                  className="text-xs text-occupied/50 hover:text-occupied px-2 py-1 rounded-lg hover:bg-occupied/10 transition-colors"
+                  aria-label={`Remove ${sub.name}`}
+                  className="text-xs text-occupied/50 hover:text-occupied px-2 py-2.5 rounded-lg hover:bg-occupied/10 transition-colors"
                 >
                   ✕
                 </button>
@@ -409,7 +422,7 @@ function GameTypeCard({
           </div>
           <button
             onClick={onAddSub}
-            className="mt-3 text-xs text-brass hover:text-brass-light font-semibold px-3 py-1.5 rounded-lg hover:bg-brass/10 transition-colors"
+            className="mt-3 text-xs text-brass hover:text-brass-light font-semibold px-3 py-2 rounded-lg hover:bg-brass/10 transition-colors"
           >
             + Add Subtype
           </button>
