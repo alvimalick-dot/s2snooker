@@ -53,11 +53,11 @@ export default function MenuManager({
   }
 
   return (
-    <div className="bg-surface-card rounded-2xl border border-surface-border p-5">
+    <div className="p-3 sm:p-5">
       <div className="text-xl font-extrabold text-ink mb-4">Pricing &amp; Menu</div>
 
       <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2">Price List &amp; Menu</div>
-      <div className="flex flex-col gap-1.5 mb-5 max-h-56 overflow-y-auto pr-1">
+      <div className="flex flex-col gap-1.5 mb-4 max-h-64 overflow-y-auto pr-1">
         {menu.length === 0 && (
           <div className="py-8 text-center">
             <div className="text-base font-bold text-slate-400 mb-1">No menu items yet</div>
@@ -81,7 +81,7 @@ export default function MenuManager({
       </div>
 
       <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2">Add New Menu Item</div>
-      <div className="grid grid-cols-2 gap-2 mb-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
         <input value={itemName} onChange={(e) => setItemName(e.target.value)}
           placeholder="Item Name"
           className="rounded-xl bg-slate-800 border-2 border-surface-border px-4 py-3 text-base font-semibold text-white focus:outline-none focus:border-brass transition-colors" />

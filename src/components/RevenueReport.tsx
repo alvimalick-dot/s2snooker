@@ -164,11 +164,11 @@ export default function RevenueReport() {
   }).length ?? 0;
 
   return (
-    <div className="p-5">
+    <div className="p-3 sm:p-5">
       <div className="text-xl font-extrabold text-ink mb-4">Financial Reports</div>
 
       {/* Date range picker */}
-      <div className="flex items-end gap-2 mb-5">
+      <div className="flex flex-wrap items-end gap-2 mb-4">
         <div className="flex-1">
           <label className="block text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">From</label>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
@@ -218,7 +218,7 @@ export default function RevenueReport() {
           </div>
 
           {/* Summary cards */}
-          <div className="grid grid-cols-2 gap-2 text-sm mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm mb-4">
             <div className="bg-slate-800 rounded-xl px-4 py-3 border-2 border-surface-border">
               <div className="text-slate-400 font-semibold">Table Rental</div>
               <div className="text-brass font-bold text-lg tabular-nums">Rs {report.totals.tableRentalRevenue.toLocaleString()}</div>
@@ -310,13 +310,13 @@ export default function RevenueReport() {
           )}
 
           {/* Export buttons */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-wrap gap-2">
             <button onClick={exportPDF} disabled={!report}
-              className="py-3 rounded-xl bg-occupied hover:bg-occupied/90 text-white text-sm font-bold uppercase tracking-wide shadow-md active:scale-[0.97] transition-all disabled:opacity-40">
+              className="flex-1 min-w-[120px] py-3 rounded-xl bg-occupied hover:bg-occupied/90 text-white text-sm font-bold uppercase tracking-wide shadow-md active:scale-[0.97] transition-all disabled:opacity-40">
               Export PDF
             </button>
             <button onClick={exportCSV} disabled={!report}
-              className="py-3 rounded-xl bg-slate-800 border-2 border-surface-border text-white text-sm font-bold uppercase tracking-wide hover:bg-slate-700 active:scale-[0.97] transition-all disabled:opacity-40">
+              className="flex-1 min-w-[120px] py-3 rounded-xl bg-slate-800 border-2 border-surface-border text-white text-sm font-bold uppercase tracking-wide hover:bg-slate-700 active:scale-[0.97] transition-all disabled:opacity-40">
               Export CSV
             </button>
           </div>

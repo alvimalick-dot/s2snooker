@@ -45,14 +45,15 @@ module.exports = {
         mono: ['JetBrains Mono', 'monospace'],
       },
       fontSize: {
-        // Bigger defaults for older users
-        'xs': ['0.875rem', { lineHeight: '1.25rem' }],   // was 0.75rem
-        'sm': ['1rem', { lineHeight: '1.5rem' }],         // was 0.875rem
-        'base': ['1.125rem', { lineHeight: '1.75rem' }],  // was 1rem
-        'lg': ['1.25rem', { lineHeight: '1.75rem' }],
-        'xl': ['1.5rem', { lineHeight: '2rem' }],
-        '2xl': ['1.875rem', { lineHeight: '2.25rem' }],
-        '3xl': ['2.25rem', { lineHeight: '2.5rem' }],
+        // Fluid scale: comfortable at 100% zoom, not oversized at 80%
+        'xs':   ['0.75rem',  { lineHeight: '1.125rem' }],
+        'sm':   ['0.875rem', { lineHeight: '1.375rem' }],
+        'base': ['1rem',     { lineHeight: '1.5rem'   }],
+        'lg':   ['1.125rem', { lineHeight: '1.625rem' }],
+        'xl':   ['1.25rem',  { lineHeight: '1.75rem'  }],
+        '2xl':  ['1.5rem',   { lineHeight: '2rem'     }],
+        '3xl':  ['1.875rem', { lineHeight: '2.25rem'  }],
+        '4xl':  ['2.25rem',  { lineHeight: '2.5rem'   }],
       },
       borderRadius: {
         'xl': '0.75rem',

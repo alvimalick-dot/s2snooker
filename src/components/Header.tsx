@@ -52,95 +52,95 @@ export default function Header({
 
   return (
     <>
-      <header className="bg-surface-card border-b-2 border-surface-border px-4 sm:px-6 py-3 sm:py-4">
-        <div className="flex items-center justify-between gap-3">
+      <header className="bg-surface-card border-b-2 border-surface-border px-3 sm:px-5 py-2.5 sm:py-3">
+        <div className="dashboard-header flex flex-wrap items-center justify-between gap-2 sm:gap-3">
           {/* Logo + Club Name */}
-          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-available flex items-center justify-center shadow-card">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="sm:w-6 sm:h-6">
+          <div className="dashboard-brand flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-available flex items-center justify-center shadow-card shrink-0">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="sm:w-5 sm:h-5">
                 <circle cx="12" cy="12" r="10" fill="white" />
                 <circle cx="12" cy="12" r="5" fill="#16a34a" />
               </svg>
             </div>
             <div className="min-w-0">
-              <div className="text-base sm:text-xl font-extrabold text-ink tracking-tight truncate max-w-[140px] sm:max-w-none">{clubName}</div>
-              <div className="text-[10px] sm:text-xs text-slate-400 font-semibold uppercase tracking-widest hidden sm:block">Table Management</div>
+              <div className="text-sm sm:text-base font-extrabold text-ink tracking-tight truncate max-w-[120px] sm:max-w-[200px] lg:max-w-none">{clubName}</div>
+              <div className="text-[9px] sm:text-[10px] text-slate-400 font-semibold uppercase tracking-widest hidden sm:block">Table Management</div>
             </div>
           </div>
 
-          {/* Nav tabs — responsive */}
-          <nav className="flex items-center gap-1 sm:gap-2 bg-slate-800 rounded-2xl p-1 sm:p-1.5 shrink-0">
+          {/* Nav tabs */}
+          <nav className="dashboard-nav flex items-center gap-1 bg-slate-800 rounded-xl p-1 shrink-0">
             <button
               onClick={() => onTabChange('floor')}
-              className={`px-3 sm:px-6 py-2 sm:py-3 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wide transition-all ${
+              className={`px-2.5 sm:px-5 py-1.5 sm:py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
                 tab === 'floor'
-                  ? 'bg-available text-white shadow-lg'
+                  ? 'bg-available text-white shadow-md'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700'
               }`}
-            >Live Floor</button>
+            >Floor</button>
             <button
               onClick={() => onTabChange('admin')}
-              className={`px-3 sm:px-6 py-2 sm:py-3 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wide transition-all ${
+              className={`px-2.5 sm:px-5 py-1.5 sm:py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
                 tab === 'admin'
-                  ? 'bg-brass text-white shadow-lg'
+                  ? 'bg-brass text-white shadow-md'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700'
               }`}
             >Settings</button>
           </nav>
 
-          {/* Staff + Shift + Clock — hidden on very small screens, shown as a row */}
-          <div className="hidden md:flex items-center gap-4">
+          {/* Staff + Shift + Clock — desktop */}
+          <div className="hidden md:flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-400 font-semibold uppercase">Staff</label>
+              <label className="text-xs text-slate-400 font-semibold uppercase shrink-0">Staff</label>
               <input
                 value={staffName}
                 onChange={(e) => onStaffNameChange(e.target.value)}
                 placeholder="Your name"
-                className="w-32 rounded-xl bg-slate-800 border-2 border-surface-border px-3 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-brass"
+                className="w-28 rounded-xl bg-slate-800 border-2 border-surface-border px-3 py-2 text-sm font-semibold text-white focus:outline-none focus:border-brass"
               />
             </div>
 
             {activeShift ? (
               <button
                 onClick={() => { setShowEndModal(true); setEndingCash(''); setShiftNotes(''); setReconciliation(null); }}
-                className="px-5 py-3 rounded-xl bg-occupied text-white text-sm font-bold shadow-lg hover:bg-occupied/90"
+                className="px-4 py-2 rounded-xl bg-occupied text-white text-sm font-bold shadow-md hover:bg-occupied/90"
               >End Shift</button>
             ) : (
               <button disabled={busy} onClick={handleStartShift}
-                className="px-5 py-3 rounded-xl bg-available text-white text-sm font-bold shadow-lg hover:bg-available/90 disabled:opacity-50"
+                className="px-4 py-2 rounded-xl bg-available text-white text-sm font-bold shadow-md hover:bg-available/90 disabled:opacity-50"
               >Start Shift</button>
             )}
 
             <button onClick={onLogout}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 border-2 border-surface-border text-sm font-semibold text-slate-400 hover:text-occupied hover:border-occupied/30 transition-all">
+              className="px-3 py-2 rounded-xl bg-slate-800 border-2 border-surface-border text-sm font-semibold text-slate-400 hover:text-occupied hover:border-occupied/30 transition-all">
               Logout
             </button>
 
-            <div className="font-mono text-lg font-bold text-ink tabular-nums min-w-[90px] text-right">
+            <div className="font-mono text-sm font-bold text-ink tabular-nums min-w-[80px] text-right">
               {time ? time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '--:--:--'}
             </div>
           </div>
 
           {/* Mobile compact controls */}
-          <div className="flex md:hidden items-center gap-2 shrink-0">
+          <div className="dashboard-mobile-controls flex md:hidden items-center gap-1.5 shrink-0">
             <input
               value={staffName}
               onChange={(e) => onStaffNameChange(e.target.value)}
               placeholder="Name"
-              className="w-20 rounded-xl bg-slate-800 border-2 border-surface-border px-2 py-2 text-xs font-semibold text-white focus:outline-none focus:border-brass"
+              className="w-16 rounded-lg bg-slate-800 border border-surface-border px-2 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-brass"
             />
             {activeShift ? (
               <button
                 onClick={() => { setShowEndModal(true); setEndingCash(''); setShiftNotes(''); setReconciliation(null); }}
-                className="px-3 py-2 rounded-xl bg-occupied text-white text-xs font-bold"
+                className="px-2.5 py-1.5 rounded-lg bg-occupied text-white text-xs font-bold"
               >End</button>
             ) : (
               <button disabled={busy} onClick={handleStartShift}
-                className="px-3 py-2 rounded-xl bg-available text-white text-xs font-bold disabled:opacity-50"
+                className="px-2.5 py-1.5 rounded-lg bg-available text-white text-xs font-bold disabled:opacity-50"
               >Start</button>
             )}
             <button onClick={onLogout}
-              className="px-2 py-2 rounded-xl bg-slate-800 border border-surface-border text-[10px] font-semibold text-slate-400">
+              className="px-2 py-1.5 rounded-lg bg-slate-800 border border-surface-border text-xs font-semibold text-slate-400">
               ↩
             </button>
             <div className="font-mono text-xs font-bold text-ink tabular-nums">

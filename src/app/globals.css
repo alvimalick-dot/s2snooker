@@ -15,10 +15,11 @@ html, body {
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow: hidden;
+  /* Allow body to scroll on very small viewports instead of clipping */
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
-/* Bigger default font for readability */
 body {
   font-size: 1rem;
   line-height: 1.5;
@@ -48,6 +49,69 @@ body {
 /* Touch-friendly buttons — prevent double-tap zoom */
 button, [role="button"] {
   touch-action: manipulation;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid #facc15;
+  outline-offset: 2px;
+}
+
+@media (max-width: 639px) {
+  html, body {
+    min-width: 320px;
+  }
+
+  button {
+    min-height: 44px;
+  }
+
+  input, select, textarea {
+    min-height: 44px;
+  }
+
+  .dashboard-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .dashboard-brand {
+    min-width: 0;
+  }
+
+  .dashboard-nav {
+    justify-self: end;
+  }
+
+  .dashboard-mobile-controls {
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-content: flex-end;
+    padding-top: 0.25rem;
+  }
+
+  .floor-toolbar {
+    align-items: stretch;
+  }
+
+  .floor-toolbar nav {
+    width: 100%;
+  }
+
+  .floor-toolbar nav button {
+    flex: 1;
+  }
+
+  .modal-footer > div {
+    flex-direction: column-reverse;
+  }
+
+  .modal-footer > div > button {
+    width: 100%;
+  }
 }
 
 /* Monospace for numbers */

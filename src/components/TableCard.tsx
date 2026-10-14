@@ -77,7 +77,7 @@ export default function TableCard({
   const isPaused = table.currentSession?.isPaused;
 
   return (
-    <div className={`h-full flex flex-col rounded-2xl border-2 overflow-hidden transition-all ${
+    <div className={`flex flex-col rounded-2xl border-2 overflow-hidden transition-all ${
       isOccupied
         ? hasOvertime
           ? 'border-occupied shadow-glow-red'
@@ -87,7 +87,7 @@ export default function TableCard({
           : 'border-reserved/40 bg-reserved-bg shadow-card'
     }`}>
       {/* ── Status strip ─────────────────────────────────────── */}
-      <div className={`px-5 py-2.5 flex items-center justify-between font-bold text-sm uppercase tracking-wider ${
+      <div className={`px-4 py-2 flex items-center justify-between font-bold text-xs uppercase tracking-wider ${
         isOccupied
           ? hasOvertime
             ? 'bg-occupied text-white'
@@ -99,8 +99,8 @@ export default function TableCard({
             : 'bg-reserved text-white'
       }`}>
         <span>{table.label ?? `Table ${table.tableNumber}`}</span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
+        <span className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
           {isOccupied
             ? hasOvertime ? 'OVERTIME' : isPaused ? 'PAUSED' : 'OCCUPIED'
             : isAvailable ? 'AVAILABLE' : 'RESERVED'
@@ -108,7 +108,7 @@ export default function TableCard({
         </span>
       </div>
 
-      <div className={`flex-1 min-h-0 overflow-hidden px-4 py-2.5 flex flex-col gap-2 ${isOccupied ? 'bg-surface-card' : ''}`}>
+      <div className={`overflow-hidden px-3 py-2 flex flex-col gap-2 ${isOccupied ? 'bg-surface-card' : ''}`}>
 
         {/* === OCCUPIED === */}
         {isOccupied && table.currentSession && bill && (
@@ -126,15 +126,15 @@ export default function TableCard({
             )}
 
             {/* Timer — big and bold */}
-            <div className="text-center py-1">
-              <div className={`font-mono [font-size:clamp(1.75rem,4vh,3rem)] font-extrabold tracking-wider tabular-nums ${
+            <div className="text-center py-0.5">
+              <div className={`font-mono text-2xl sm:text-3xl font-extrabold tracking-wider tabular-nums ${
                 hasOvertime ? 'text-occupied' : isPaused ? 'text-reserved' : 'text-ink'
               }`}>
                 {formatElapsed(bill.elapsedMs)}
               </div>
               {isPaused && (
-                <div className="text-base text-reserved font-bold mt-1 flex items-center justify-center gap-1">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                <div className="text-xs text-reserved font-bold mt-0.5 flex items-center justify-center gap-1">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
                   PAUSED
                 </div>
               )}
@@ -151,18 +151,18 @@ export default function TableCard({
               const grandTotal = bill.total + accTotal;
               const hasGames = unsettled.length > 0;
               return (
-                <div className={`flex items-baseline justify-between rounded-xl px-4 py-3 border-2 ${
+                <div className={`flex items-baseline justify-between rounded-xl px-3 py-2 border-2 ${
                   hasOvertime
                     ? 'bg-occupied-bg border-occupied/20'
                     : 'bg-slate-800/60 border-surface-border'
                 }`}>
                   <div>
-                    <span className="text-sm text-slate-400 font-bold uppercase">Bill</span>
+                    <span className="text-xs text-slate-400 font-bold uppercase">Bill</span>
                     {hasGames && (
-                      <span className="text-[10px] text-brass font-bold ml-2">{unsettled.length + 1} games</span>
+                      <span className="text-[9px] text-brass font-bold ml-1.5">{unsettled.length + 1} games</span>
                     )}
                   </div>
-              <span className={`font-mono [font-size:clamp(1.25rem,3vh,1.875rem)] font-extrabold tabular-nums ${
+              <span className={`font-mono text-xl sm:text-2xl font-extrabold tabular-nums ${
                 hasOvertime ? 'text-occupied' : 'text-ink'
               }`}>
                 Rs {grandTotal.toLocaleString()}
@@ -172,14 +172,14 @@ export default function TableCard({
             })()}
 
             {/* Customer + game type */}
-            <div className="flex items-center justify-between">
-              <div className="text-base text-slate-300 font-bold min-w-0 truncate">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm text-slate-300 font-bold min-w-0 truncate">
                 {table.currentSession.customerName || '—'}
                 {table.currentSession.switchedFromTableNumber != null && (
-                  <span className="text-slate-400 ml-2 text-sm">← T{table.currentSession.switchedFromTableNumber}</span>
+                  <span className="text-slate-400 ml-1.5 text-xs">← T{table.currentSession.switchedFromTableNumber}</span>
                 )}
               </div>
-              <span className="shrink-0 rounded-full bg-brass-bg border border-brass/30 px-3 py-1 text-xs font-bold text-brass uppercase">
+              <span className="shrink-0 rounded-full bg-brass-bg border border-brass/30 px-2 py-0.5 text-[10px] font-bold text-brass uppercase">
                 {(table.currentSession.gameType ?? table.currentSession.pricingType ?? 'game').replace(/_/g, ' ')}
               </span>
             </div>
@@ -244,28 +244,28 @@ export default function TableCard({
               </div>
             )}
 
-            {/* BIG action buttons — touch-friendly 48px+ */}
-            <div className="flex gap-3">
+            {/* BIG action buttons — touch-friendly 44px+ */}
+            <div className="flex gap-2">
               {!isPaused && !showPauseForm && (
                 <button disabled={busy} onClick={() => setShowPauseForm(true)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-800 border-2 border-surface-border text-sm font-bold uppercase text-ink hover:bg-slate-700 active:scale-[0.97] transition-all">
+                  className="flex-1 py-2 rounded-xl bg-slate-800 border-2 border-surface-border text-xs font-bold uppercase text-ink hover:bg-slate-700 active:scale-[0.97] transition-all">
                   Pause
                 </button>
               )}
               <button disabled={busy} onClick={() => onOpenOrder(table)}
-                className="flex-1 py-2.5 rounded-xl bg-brass text-white text-sm font-bold uppercase shadow-md hover:bg-brass-light active:scale-[0.97] transition-all">
+                className="flex-1 py-2 rounded-xl bg-brass text-white text-xs font-bold uppercase shadow-md hover:bg-brass-light active:scale-[0.97] transition-all">
                 + Order
               </button>
               <button disabled={busy} onClick={endSession}
-                className={`flex-1 py-2.5 rounded-xl text-white text-sm font-bold uppercase shadow-md active:scale-[0.97] transition-all ${
+                className={`flex-1 py-2 rounded-xl text-white text-xs font-bold uppercase shadow-md active:scale-[0.97] transition-all ${
                   hasOvertime ? 'bg-occupied hover:bg-occupied/90 animate-pulse' : 'bg-occupied hover:bg-occupied/90'
                 }`}>
                 End
               </button>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-2">
               <button disabled={busy} onClick={() => onOpenNewGame(table)}
-                className="flex-1 py-3 rounded-xl bg-brass-bg border-2 border-brass/30 text-sm font-bold uppercase text-brass hover:bg-brass/10 active:scale-[0.97] transition-all">
+                className="flex-1 py-2 rounded-xl bg-brass-bg border-2 border-brass/30 text-xs font-bold uppercase text-brass hover:bg-brass/10 active:scale-[0.97] transition-all">
                 🎱 New Game
               </button>
               {(table.currentSession.billingMode ?? 'flat_rate') === 'flat_rate' && (
@@ -279,7 +279,7 @@ export default function TableCard({
                     onChanged();
                   } catch (e: any) { alert(e.message ?? 'Failed'); } finally { setBusy(false); }
                 }}
-                className="flex-1 py-3 rounded-xl bg-reserved-bg border-2 border-reserved/30 text-sm font-bold uppercase text-reserved hover:bg-reserved/10 active:scale-[0.97] transition-all">
+                className="flex-1 py-2 rounded-xl bg-reserved-bg border-2 border-reserved/30 text-xs font-bold uppercase text-reserved hover:bg-reserved/10 active:scale-[0.97] transition-all">
                   ⏱ Time
                 </button>
               )}
@@ -289,15 +289,15 @@ export default function TableCard({
 
         {/* === AVAILABLE === */}
         {isAvailable && (
-          <div className="py-8 flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-available flex items-center justify-center shadow-glow-green">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+          <div className="py-5 flex flex-col items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-available flex items-center justify-center shadow-glow-green">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
                 <circle cx="12" cy="12" r="10" />
                 <path d="M12 8v8M8 12h8" />
               </svg>
             </div>
             <button disabled={busy} onClick={() => onOpenStart(table)}
-              className="w-full py-4 rounded-xl bg-available text-white text-lg font-extrabold uppercase shadow-lg hover:bg-available/90 active:scale-[0.97] transition-all disabled:opacity-50">
+              className="w-full py-3 rounded-xl bg-available text-white text-base font-extrabold uppercase shadow-lg hover:bg-available/90 active:scale-[0.97] transition-all disabled:opacity-50">
               Start Session
             </button>
           </div>

@@ -125,7 +125,7 @@ export default function TableRatesManager() {
   if (!config) return <div className="text-slate-400 py-8 text-center">Loading rates…</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 p-3 sm:p-5">
       {/* ── Standard Tables Section ──────────────────────────── */}
       <SectionPanel
         section="tables"

@@ -23,11 +23,11 @@ export default function StatsStrip({
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
+    <div className="flex gap-2 overflow-x-auto pb-0.5 flex-1 min-w-0">
       {stats.map((s) => (
-        <div key={s.label} className={`${s.bg} rounded-2xl border-2 ${s.border} px-3 sm:px-5 py-3 sm:py-4 text-center shadow-card`}>
-          <div className={`font-mono text-lg sm:text-2xl font-extrabold tabular-nums ${s.color}`}>{s.value}</div>
-          <div className="text-[10px] sm:text-xs text-slate-400 font-semibold uppercase tracking-wider mt-1">{s.label}</div>
+        <div key={s.label} className={`${s.bg} rounded-xl border-2 ${s.border} px-3 py-2 text-center shadow-card shrink-0 min-w-[80px]`}>
+          <div className={`font-mono text-base sm:text-lg font-extrabold tabular-nums ${s.color}`}>{s.value}</div>
+          <div className="text-[9px] sm:text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5 whitespace-nowrap">{s.label}</div>
         </div>
       ))}
     </div>

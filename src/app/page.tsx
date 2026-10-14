@@ -32,17 +32,15 @@ function FitGrid<T extends { _id: string }>({
   cols: number;
   children: (t: T) => ReactNode;
 }) {
-  const rows = Math.max(1, Math.ceil(tables.length / cols));
   return (
     <div
-      className="flex-1 min-h-0 grid gap-3 sm:gap-4"
+      className="grid gap-3 sm:gap-4"
       style={{
         gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-        gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
       }}
     >
       {tables.map((t) => (
-        <div key={t._id} className="min-h-0 overflow-hidden">{children(t)}</div>
+        <div key={t._id}>{children(t)}</div>
       ))}
     </div>
   );
@@ -188,7 +186,7 @@ export default function DashboardPage() {
   if (!authenticated) return <LoginScreen onLogin={() => setAuthenticated(true)} />;
 
   return (
-    <div className="h-dvh flex flex-col bg-surface-dark">
+    <div className="min-h-dvh flex flex-col bg-surface-dark">
       <Header
         clubName={CLUB_NAME}
         tab={tab}
@@ -200,10 +198,10 @@ export default function DashboardPage() {
         onLogout={handleLogout}
       />
 
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row">
         {/* === FLOOR VIEW === */}
         {tab === 'floor' && (
-          <main className="flex-1 min-h-0 overflow-hidden p-3 sm:p-6 flex flex-col gap-3 sm:gap-4">
+          <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-6 flex flex-col gap-3 sm:gap-4">
             {loadError && (
               <div className="shrink-0 bg-occupied/10 border border-occupied/30 rounded-xl p-3 sm:p-4 text-xs sm:text-sm text-occupied">
                 {loadError}
@@ -211,12 +209,12 @@ export default function DashboardPage() {
             )}
 
             {/* Floor sub-tabs: Dashboard | Customers */}
-            <div className="shrink-0 flex items-center justify-between gap-3">
+            <div className="floor-toolbar shrink-0 flex flex-wrap items-center justify-between gap-2">
               <StatsStrip tables={tables} todayRevenue={todayRevenue} customerAccounts={customerAccounts} />
               <nav className="flex items-center gap-1 bg-slate-800 rounded-2xl p-1 shrink-0">
                 <button
                   onClick={() => setFloorSubTab('dashboard')}
-                  className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wide transition-all ${
+                  className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wide transition-all ${
                     floorSubTab === 'dashboard'
                       ? 'bg-available text-white shadow-lg'
                       : 'text-slate-400 hover:text-white hover:bg-slate-700'
@@ -224,7 +222,7 @@ export default function DashboardPage() {
                 >📊 Dashboard</button>
                 <button
                   onClick={() => setFloorSubTab('customers')}
-                  className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wide transition-all ${
+                  className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wide transition-all ${
                     floorSubTab === 'customers'
                       ? 'bg-brass text-white shadow-lg'
                       : 'text-slate-400 hover:text-white hover:bg-slate-700'
@@ -235,8 +233,8 @@ export default function DashboardPage() {
 
             {/* Dashboard sub-tab */}
             {floorSubTab === 'dashboard' && tables.length > 0 ? (
-              <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3 sm:gap-4 overflow-hidden">
-                <div className="flex-1 min-h-0 flex flex-col">
+              <div className="min-w-0 flex flex-col lg:flex-row gap-3 sm:gap-4">
+                <div className="min-w-0 flex-1 flex flex-col">
                   <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-slate-400 mb-2 sm:mb-3">Standard Tables</div>
                   <FitGrid tables={mainTables} cols={mainCols}>
                     {(t) => (
@@ -255,7 +253,7 @@ export default function DashboardPage() {
                 </div>
 
                 {privateTables.length > 0 && (
-                  <div className="w-full lg:w-[22rem] shrink-0 min-h-0 flex flex-col">
+                  <div className="min-w-0 w-full lg:w-80 xl:w-96 shrink-0 flex flex-col">
                     <div className="shrink-0 text-xs font-bold uppercase tracking-widest text-slate-400 mb-2 sm:mb-3">Private Room</div>
                     <FitGrid tables={privateTables} cols={isMobile ? mainCols : 1}>
                       {(t) => (
@@ -283,7 +281,7 @@ export default function DashboardPage() {
 
             {/* Customers sub-tab */}
             {floorSubTab === 'customers' && (
-              <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto">
                 <CustomerHistory />
               </div>
             )}
@@ -294,8 +292,8 @@ export default function DashboardPage() {
         {tab === 'admin' && (
           <>
             <Sidebar active={adminTab} onSelect={setAdminTab} />
-            <main className="flex-1 min-h-0 overflow-hidden p-3 sm:p-6 flex flex-col">
-              <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl border-2 border-surface-border bg-surface-card/40">
+            <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-6 flex flex-col">
+              <div className="flex-1 overflow-y-auto rounded-2xl border-2 border-surface-border bg-surface-card/40">
                 {adminTab === 'rates' && <TableRatesManager />}
                 {adminTab === 'menu' && <MenuManager menu={menu} onChanged={refresh} />}
                 {adminTab === 'reports' && <RevenueReport />}
